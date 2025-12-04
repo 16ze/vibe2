@@ -1,0 +1,36 @@
+{
+  "name": "Story",
+  "type": "object",
+  "properties": {
+    "media_url": {
+      "type": "string",
+      "description": "URL of the story media"
+    },
+    "media_type": {
+      "type": "string",
+      "enum": [
+        "photo",
+        "video"
+      ],
+      "default": "photo"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "24h expiration"
+    },
+    "views_count": {
+      "type": "number",
+      "default": 0
+    },
+    "author_name": {
+      "type": "string"
+    },
+    "author_avatar": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "media_url"
+  ]
+}

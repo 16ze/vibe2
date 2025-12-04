@@ -1,0 +1,35 @@
+{
+  "name": "Follow",
+  "type": "object",
+  "properties": {
+    "follower_email": {
+      "type": "string",
+      "description": "Email de l'utilisateur qui envoie la demande"
+    },
+    "following_email": {
+      "type": "string",
+      "description": "Email de l'utilisateur qui reçoit la demande"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "NONE",
+        "REQUEST_SENT",
+        "REQUEST_RECEIVED",
+        "FRIENDS",
+        "active",
+        "pending"
+      ],
+      "default": "NONE",
+      "description": "Statut de la relation: NONE (pas d'amis), REQUEST_SENT (demande envoyée), REQUEST_RECEIVED (demande reçue), FRIENDS (amis)"
+    },
+    "created_date": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "follower_email",
+    "following_email"
+  ]
+}

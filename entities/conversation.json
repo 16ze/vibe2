@@ -1,0 +1,34 @@
+{
+  "name": "Conversation",
+  "type": "object",
+  "properties": {
+    "participant_email": {
+      "type": "string",
+      "description": "Email of the other participant"
+    },
+    "participant_name": {
+      "type": "string"
+    },
+    "participant_avatar": {
+      "type": "string"
+    },
+    "last_message": {
+      "type": "string"
+    },
+    "last_message_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "unread_count": {
+      "type": "number",
+      "default": 0
+    },
+    "is_online": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [
+    "participant_email"
+  ]
+}

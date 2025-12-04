@@ -1,0 +1,78 @@
+{
+  "name": "Post",
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": ["image", "video", "text"],
+      "default": "image",
+      "description": "Type of post: image, video, or text status"
+    },
+    "media_url": {
+      "type": "string",
+      "description": "URL of the photo or video (for image/video posts)"
+    },
+    "media_type": {
+      "type": "string",
+      "enum": ["photo", "video"],
+      "default": "photo",
+      "description": "Legacy media type field (deprecated, use 'type' instead)"
+    },
+    "caption": {
+      "type": "string",
+      "description": "Post caption"
+    },
+    "content": {
+      "type": "string",
+      "description": "Text content for text posts (status)"
+    },
+    "backgroundStyle": {
+      "type": "string",
+      "description": "Background style for text posts (preset name or CSS gradient)",
+      "enum": [
+        "vibe-purple",
+        "vibe-sunset",
+        "vibe-dark",
+        "vibe-ocean",
+        "vibe-fire",
+        "vibe-aurora",
+        "vibe-midnight",
+        "vibe-gradient"
+      ]
+    },
+    "textStyle": {
+      "type": "string",
+      "description": "Text style for text posts",
+      "enum": [
+        "default",
+        "bold",
+        "italic",
+        "serif",
+        "mono",
+        "handwritten",
+        "centered",
+        "left",
+        "right"
+      ]
+    },
+    "filter": {
+      "type": "string",
+      "description": "Applied filter name"
+    },
+    "likes_count": {
+      "type": "number",
+      "default": 0
+    },
+    "comments_count": {
+      "type": "number",
+      "default": 0
+    },
+    "author_name": {
+      "type": "string"
+    },
+    "author_avatar": {
+      "type": "string"
+    }
+  },
+  "required": ["type"]
+}

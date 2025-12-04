@@ -1,0 +1,53 @@
+{
+  "name": "Message",
+  "type": "object",
+  "properties": {
+    "conversation_id": {
+      "type": "string"
+    },
+    "sender_email": {
+      "type": "string"
+    },
+    "content": {
+      "type": "string"
+    },
+    "media_url": {
+      "type": "string"
+    },
+    "media_type": {
+      "type": "string",
+      "enum": [
+        "text",
+        "photo",
+        "video",
+        "voice",
+        "gif"
+      ]
+    },
+    "is_read": {
+      "type": "boolean",
+      "default": false
+    },
+    "reply_to_id": {
+      "type": "string"
+    },
+    "reactions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "emoji": {
+            "type": "string"
+          },
+          "user_email": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "conversation_id",
+    "sender_email"
+  ]
+}
