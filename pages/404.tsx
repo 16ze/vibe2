@@ -8,7 +8,7 @@ import Link from 'next/link';
  */
 export default function NotFound() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 flex items-center justify-center px-4">
+    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-cyan-50 flex items-center justify-center px-4">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -36,7 +36,7 @@ export default function NotFound() {
         <Link href="/">
           <motion.button
             whileTap={{ scale: 0.95 }}
-            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-500 text-white rounded-xl font-semibold hover:shadow-lg transition-shadow mx-auto"
+            className="flex items-center gap-2 px-6 py-3 bg-gradient-vibe text-white rounded-xl font-semibold hover:shadow-lg transition-shadow glow-vibe mx-auto"
           >
             <Home className="w-5 h-5" />
             Retour à l'accueil

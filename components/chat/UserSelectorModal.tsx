@@ -1,6 +1,7 @@
 "use client";
 
 import { vibe } from "@/api/vibeClient";
+import { useUI } from "@/contexts/UIContext";
 import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import { Search, X } from "lucide-react";
@@ -23,9 +24,35 @@ export default function UserSelectorModal({
   onSelectUser,
   currentUser,
 }: UserSelectorModalProps) {
+  /**
+   * Récupère les fonctions pour masquer/afficher la BottomNav
+   */
+  const { hideBottomNav, showBottomNav } = useUI();
   const [users, setUsers] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+
+  /**
+   * Masque la BottomNav quand la modale est ouverte
+   * La réaffiche quand la modale est fermée
+   * Pattern robuste avec délai de sécurité pour les animations
+   */
+  useEffect(() => {
+    if (isOpen) {
+      hideBottomNav();
+    } else {
+      // Délai de sécurité pour laisser l'animation de fermeture se finir si besoin
+      const timer = setTimeout(() => {
+        showBottomNav();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+
+    // Sécurité ultime au démontage
+    return () => {
+      showBottomNav();
+    };
+  }, [isOpen, hideBottomNav, showBottomNav]);
 
   /**
    * Récupère les relations (Follow) pour déterminer les amis

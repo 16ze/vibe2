@@ -1,11 +1,11 @@
 /**
  * Données mock pour les posts du Feed
  * Inclut des posts média (image/vidéo) et texte (style Twitter)
- * 
+ *
  * IMPORTANT : Structure des types discriminés
  * - Posts média (type: "media") : DOIVENT avoir media_url (obligatoire)
  * - Posts texte (type: "text") : DOIVENT avoir content (obligatoire)
- * 
+ *
  * TypeScript valide automatiquement cette structure grâce aux unions discriminées
  */
 
@@ -24,8 +24,7 @@ export const mockPosts: Post[] = [
     media_url:
       "https://images.unsplash.com/photo-1682687220742-aba13b6e50ba?w=800",
     media_type: "photo",
-    caption:
-      "Coucher de soleil incroyable ce soir #sunset #vibes #photography",
+    caption: "Coucher de soleil incroyable ce soir #sunset #vibes #photography",
     likes_count: 1245,
     comments_count: 89,
     author_name: "sarah_photo",
@@ -37,7 +36,8 @@ export const mockPosts: Post[] = [
   {
     id: "post-2",
     type: "text",
-    content: "Je viens de finir mon premier marathon. 42km de pure souffrance mais quelle fierté !",
+    content:
+      "Je viens de finir mon premier marathon. 42km de pure souffrance mais quelle fierté !",
     likes_count: 3420,
     comments_count: 156,
     author_name: "runner_paris",
@@ -64,7 +64,8 @@ export const mockPosts: Post[] = [
   {
     id: "post-4",
     type: "text",
-    content: "Unpopular opinion: le café froid c'est meilleur que le café chaud",
+    content:
+      "Unpopular opinion: le café froid c'est meilleur que le café chaud",
     likes_count: 1876,
     comments_count: 98,
     author_name: "coffee_thoughts",
@@ -91,7 +92,8 @@ export const mockPosts: Post[] = [
   {
     id: "post-6",
     type: "text",
-    content: "Les gens qui mettent le lait avant les céréales, vous allez bien ?",
+    content:
+      "Les gens qui mettent le lait avant les céréales, vous allez bien ?",
     likes_count: 2134,
     comments_count: 312,
     author_name: "random_thoughts",
@@ -207,7 +209,8 @@ export const mockPosts: Post[] = [
   {
     id: "post-14",
     type: "text",
-    content: "Rappel : ton code n'a pas besoin d'être parfait pour être mis en prod. Ship it.",
+    content:
+      "Rappel : ton code n'a pas besoin d'être parfait pour être mis en prod. Ship it.",
     likes_count: 5234,
     comments_count: 287,
     author_name: "tech_wisdom",
@@ -219,7 +222,8 @@ export const mockPosts: Post[] = [
   {
     id: "post-15",
     type: "text",
-    content: "Mon chat vient de renverser mon café sur mon clavier. Lundi classique.",
+    content:
+      "Mon chat vient de renverser mon café sur mon clavier. Lundi classique.",
     likes_count: 8912,
     comments_count: 456,
     author_name: "daily_chaos",
@@ -231,7 +235,8 @@ export const mockPosts: Post[] = [
   {
     id: "post-16",
     type: "text",
-    content: "On passe tellement de temps à planifier qu'on oublie de vivre. Juste une pensée.",
+    content:
+      "On passe tellement de temps à planifier qu'on oublie de vivre. Juste une pensée.",
     likes_count: 3678,
     comments_count: 189,
     author_name: "mindful_moments",

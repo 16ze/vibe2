@@ -4,36 +4,60 @@
 
 /**
  * Styles globaux pour l'application VIBE
+ * Identité visuelle "Electric Vibe" - Violet Électrique → Bleu Cyan
  */
 
 :root {
-  --color-primary: #8B5CF6;
-  --color-secondary: #EC4899;
-  --color-accent: #F97316;
+  /* Couleurs principales Electric Vibe */
+  --color-primary: #4f46e5; /* Indigo */
+  --color-secondary: #9333ea; /* Purple */
+  --color-accent: #06b6d4; /* Cyan */
+  --color-electric: #6366f1; /* Indigo Light */
+  --color-violet: #8b5cf6; /* Violet */
+
+  /* Dégradés */
+  --gradient-vibe: linear-gradient(to right, #4f46e5, #9333ea);
+  --gradient-vibe-vertical: linear-gradient(to bottom, #4f46e5, #9333ea);
+  --gradient-vibe-cyan: linear-gradient(to right, #4f46e5, #06b6d4);
+  --gradient-vibe-electric: linear-gradient(to right, #6366f1, #8b5cf6, #9333ea);
+  --gradient-vibe-glow: linear-gradient(135deg, #4f46e5 0%, #9333ea 50%, #06b6d4 100%);
 }
 
 @layer base {
   html {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden; /* Empêche le scroll horizontal pendant les animations */
   }
 
   body {
     @apply bg-white text-gray-900;
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI",
+      Roboto, "Helvetica Neue", Arial, sans-serif;
     overscroll-behavior: none;
+    overflow-x: hidden; /* Empêche le scroll horizontal pendant les animations */
+  }
+
+  /* Conteneur principal pour l'animation de carrousel */
+  #__next {
+    height: 100%;
+    width: 100%;
+    overflow-x: hidden;
+    position: relative;
   }
 
   * {
     -webkit-tap-highlight-color: transparent;
   }
 
-  input, textarea {
+  input,
+  textarea {
     font-size: 16px !important;
   }
 }
 
 @layer utilities {
+  /* Scrollbar cachée */
   .scrollbar-hide {
     -ms-overflow-style: none;
     scrollbar-width: none;
@@ -43,6 +67,7 @@
     display: none;
   }
 
+  /* Safe areas iOS */
   .pb-safe {
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
@@ -50,5 +75,100 @@
   .pt-safe {
     padding-top: env(safe-area-inset-top, 0px);
   }
-}
 
+  /**
+   * Classes utilitaires Electric Vibe
+   */
+
+  /* Texte avec dégradé Vibe */
+  .text-gradient-vibe {
+    @apply bg-clip-text text-transparent;
+    background-image: var(--gradient-vibe);
+  }
+
+  .text-gradient-vibe-electric {
+    @apply bg-clip-text text-transparent;
+    background-image: var(--gradient-vibe-electric);
+  }
+
+  .text-gradient-vibe-cyan {
+    @apply bg-clip-text text-transparent;
+    background-image: var(--gradient-vibe-cyan);
+  }
+
+  .text-gradient-vibe-glow {
+    @apply bg-clip-text text-transparent;
+    background-image: var(--gradient-vibe-glow);
+  }
+
+  /* Fond avec dégradé Vibe */
+  .bg-gradient-vibe {
+    background-image: var(--gradient-vibe);
+  }
+
+  .bg-gradient-vibe-vertical {
+    background-image: var(--gradient-vibe-vertical);
+  }
+
+  .bg-gradient-vibe-cyan {
+    background-image: var(--gradient-vibe-cyan);
+  }
+
+  .bg-gradient-vibe-electric {
+    background-image: var(--gradient-vibe-electric);
+  }
+
+  .bg-gradient-vibe-glow {
+    background-image: var(--gradient-vibe-glow);
+  }
+
+  /* Bordure avec dégradé (pour les stories actives) */
+  .border-gradient-vibe {
+    border: 2px solid transparent;
+    background: linear-gradient(white, white) padding-box,
+      var(--gradient-vibe) border-box;
+  }
+
+  .ring-gradient-vibe {
+    position: relative;
+  }
+
+  .ring-gradient-vibe::before {
+    content: "";
+    position: absolute;
+    inset: -3px;
+    border-radius: inherit;
+    padding: 3px;
+    background: var(--gradient-vibe);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box,
+      linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+  }
+
+  /* Bouton Vibe stylé */
+  .btn-vibe {
+    @apply px-6 py-3 rounded-xl font-semibold text-white transition-all duration-200;
+    background-image: var(--gradient-vibe);
+  }
+
+  .btn-vibe:hover {
+    @apply shadow-lg;
+    filter: brightness(1.1);
+  }
+
+  .btn-vibe:active {
+    transform: scale(0.98);
+  }
+
+  /* Glow effect */
+  .glow-vibe {
+    box-shadow: 0 0 20px rgba(79, 70, 229, 0.4),
+      0 0 40px rgba(147, 51, 234, 0.2);
+  }
+
+  .glow-vibe-cyan {
+    box-shadow: 0 0 20px rgba(79, 70, 229, 0.3), 0 0 40px rgba(6, 182, 212, 0.2);
+  }
+}

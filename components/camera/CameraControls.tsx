@@ -1,6 +1,5 @@
-import React from 'react';
-import { motion } from 'framer-motion';
-import { Image } from 'lucide-react';
+import { motion } from "framer-motion";
+import { Image } from "lucide-react";
 
 interface CameraControlsProps {
   onCapture: () => void;
@@ -18,7 +17,7 @@ export default function CameraControls({
   onCapture,
   onOpenGallery,
   isRecording,
-  lastPhoto
+  lastPhoto,
 }: CameraControlsProps) {
   return (
     <div className="absolute inset-x-0 bottom-0">
@@ -30,7 +29,11 @@ export default function CameraControls({
           className="w-12 h-12 rounded-xl overflow-hidden bg-gray-800 border-2 border-white/30"
         >
           {lastPhoto ? (
-            <img src={lastPhoto} alt="" className="w-full h-full object-cover" />
+            <img
+              src={lastPhoto}
+              alt=""
+              className="w-full h-full object-cover"
+            />
           ) : (
             <div className="w-full h-full flex items-center justify-center">
               <Image className="w-5 h-5 text-white/70" />
@@ -43,16 +46,18 @@ export default function CameraControls({
           whileTap={{ scale: 0.95 }}
           onPointerDown={onCapture}
           className={`w-20 h-20 rounded-full border-4 border-white flex items-center justify-center transition-all ${
-            isRecording 
-              ? 'bg-red-500 scale-110' 
-              : 'bg-white/20 backdrop-blur-sm'
+            isRecording
+              ? "bg-red-500 scale-110"
+              : "bg-white/20 backdrop-blur-sm"
           }`}
         >
-          <div className={`rounded-full transition-all ${
-            isRecording 
-              ? 'w-8 h-8 bg-red-600 rounded-lg' 
-              : 'w-16 h-16 bg-white'
-          }`} />
+          <div
+            className={`rounded-full transition-all ${
+              isRecording
+                ? "w-8 h-8 bg-red-600 rounded-lg"
+                : "w-16 h-16 bg-white"
+            }`}
+          />
         </motion.button>
 
         {/* Espaceur pour aligner avec la galerie */}

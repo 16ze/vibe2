@@ -87,14 +87,15 @@ const MediaRenderer = forwardRef<HTMLVideoElement | HTMLImageElement, MediaRende
         setError(false);
 
         // Si src commence par "indexeddb://", on extrait l'ID
+        // Sinon, on considère que src est directement l'ID
         const fileId = src.startsWith("indexeddb://")
           ? src.replace("indexeddb://", "")
           : src;
 
-        // Construit l'URL IndexedDB si nécessaire
-        const indexedDbUrl = src.startsWith("indexeddb://")
-          ? src
-          : `indexeddb://${fileId}`;
+        // Construit l'URL IndexedDB au format attendu
+        const indexedDbUrl = `indexeddb://${fileId}`;
+
+        console.log("[MediaRenderer] Loading from IndexedDB:", indexedDbUrl);
 
         // Récupère l'URL blob depuis IndexedDB
         const url = await indexedDBStorage.File.getFileUrl(indexedDbUrl);
@@ -107,11 +108,13 @@ const MediaRenderer = forwardRef<HTMLVideoElement | HTMLImageElement, MediaRende
 
           setMediaUrl(url);
           blobUrlRef.current = url.startsWith("blob:") ? url : null;
+          console.log("[MediaRenderer] Media loaded successfully:", url.substring(0, 50));
         } else {
+          console.error("[MediaRenderer] No URL returned from IndexedDB");
           setError(true);
         }
       } catch (err) {
-        console.error("Error loading media from IndexedDB:", err);
+        console.error("[MediaRenderer] Error loading media from IndexedDB:", err);
         setError(true);
       } finally {
         setIsLoading(false);

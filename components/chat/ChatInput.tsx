@@ -1,6 +1,6 @@
-import React, { useState, useRef } from 'react';
-import { motion } from 'framer-motion';
-import { Camera, Image, Mic, Send, Smile, X } from 'lucide-react';
+import { motion } from "framer-motion";
+import { Camera, Image, Mic, Send, Smile, X } from "lucide-react";
+import React, { useRef, useState } from "react";
 
 interface ChatInputProps {
   onSend?: (data: any) => void;
@@ -10,21 +10,27 @@ interface ChatInputProps {
   onCancelReply?: () => void;
 }
 
-export default function ChatInput({ onSend, onOpenCamera, onOpenGallery, replyingTo, onCancelReply }: ChatInputProps) {
-  const [message, setMessage] = useState('');
+export default function ChatInput({
+  onSend,
+  onOpenCamera,
+  onOpenGallery,
+  replyingTo,
+  onCancelReply,
+}: ChatInputProps) {
+  const [message, setMessage] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const inputRef = useRef(null);
 
   const handleSend = () => {
     if (message.trim()) {
       onSend?.({ content: message.trim(), reply_to_id: replyingTo?.id });
-      setMessage('');
+      setMessage("");
       onCancelReply?.();
     }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
@@ -36,8 +42,12 @@ export default function ChatInput({ onSend, onOpenCamera, onOpenGallery, replyin
       {replyingTo && (
         <div className="flex items-center gap-2 px-3 py-2 mb-2 bg-gray-50 rounded-xl">
           <div className="flex-1 border-l-2 border-blue-500 pl-2">
-            <p className="text-xs text-gray-500">Réponse à {replyingTo.sender_name}</p>
-            <p className="text-sm text-gray-700 truncate">{replyingTo.content}</p>
+            <p className="text-xs text-gray-500">
+              Réponse à {replyingTo.sender_name}
+            </p>
+            <p className="text-sm text-gray-700 truncate">
+              {replyingTo.content}
+            </p>
           </div>
           <button onClick={onCancelReply}>
             <X className="w-5 h-5 text-gray-400" />
@@ -60,7 +70,7 @@ export default function ChatInput({ onSend, onOpenCamera, onOpenGallery, replyin
           <button className="flex-shrink-0 pb-0.5">
             <Smile className="w-6 h-6 text-gray-500" />
           </button>
-          
+
           <textarea
             ref={inputRef}
             value={message}
@@ -69,7 +79,7 @@ export default function ChatInput({ onSend, onOpenCamera, onOpenGallery, replyin
             placeholder="Message..."
             rows={1}
             className="flex-1 bg-transparent resize-none outline-none text-[15px] text-gray-900 placeholder-gray-400 max-h-24"
-            style={{ minHeight: '24px' }}
+            style={{ minHeight: "24px" }}
           />
 
           {!message.trim() ? (
@@ -83,9 +93,11 @@ export default function ChatInput({ onSend, onOpenCamera, onOpenGallery, replyin
                 onPointerUp={() => setIsRecording(false)}
                 onPointerLeave={() => setIsRecording(false)}
               >
-                <Mic className={`w-6 h-6 transition-colors ${
-                  isRecording ? 'text-red-500' : 'text-gray-500'
-                }`} />
+                <Mic
+                  className={`w-6 h-6 transition-colors ${
+                    isRecording ? "text-red-500" : "text-gray-500"
+                  }`}
+                />
               </motion.button>
             </div>
           ) : (

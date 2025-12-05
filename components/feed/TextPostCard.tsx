@@ -2,7 +2,7 @@
 
 import { TextPost } from "@/types/post";
 import { formatDistanceToNow } from "date-fns";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   Bookmark,
   Heart,
@@ -118,7 +118,7 @@ export default function TextPostCard({
         {/* Header : Avatar + Nom + Username + Date */}
         <div className="flex items-start gap-3 mb-4">
           {/* Avatar avec bordure subtile */}
-          <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-purple-100 to-pink-100 flex-shrink-0 ring-1 ring-gray-200">
+          <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-indigo-100 to-purple-100 flex-shrink-0 ring-1 ring-gray-200">
             {post.author_avatar ? (
               <img
                 src={post.author_avatar}

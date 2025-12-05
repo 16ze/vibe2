@@ -1,19 +1,20 @@
 "use client";
 
 import { vibe } from "@/api/vibeClient";
-import Header from "@/components/common/Header";
+import CommentDrawer from "@/components/comments/CommentDrawer";
+import ComposeModal from "@/components/create/ComposeModal";
 import PostCard from "@/components/feed/PostCard";
 import StoriesBar from "@/components/feed/StoriesBar";
 import TextPostCard from "@/components/feed/TextPostCard";
 import StoryViewer from "@/components/story/StoryViewer";
-import CommentDrawer from "@/components/comments/CommentDrawer";
-import ComposeModal from "@/components/create/ComposeModal";
+import { useSwipeNavigation } from "@/hooks/useSwipeNavigation";
 import { Post } from "@/types/post";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
-import { Loader2, Plus, Search, Bell } from "lucide-react";
+import { Bell, Loader2, Plus, Search } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+
 export default function Feed() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [viewingStories, setViewingStories] = useState<any>(null);
@@ -25,6 +26,31 @@ export default function Feed() {
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const router = useRouter();
+
+  /**
+   * Navigation par swipe : Feed -> Vibes
+   * Désactivé quand des modals sont ouverts ou pendant le visionnage de stories
+   */
+  const isSwipeDisabled = !!viewingStories || isCommentOpen || isComposeOpen;
+  useSwipeNavigation({
+    onSwipeLeft: "/vibes",
+    disabled: isSwipeDisabled,
+  });
+
+  /**
+   * Récupère le nombre de notifications non lues (mock pour l'instant)
+   * TODO: Remplacer par une vraie requête API
+   */
+  const { data: unreadNotificationsCount = 3 } = useQuery({
+    queryKey: ["unreadNotificationsCount", currentUser?.email],
+    queryFn: async () => {
+      // Simulation : retourne 3 notifications non lues
+      // TODO: Remplacer par une vraie requête vers l'API
+      return 3;
+    },
+    enabled: !!currentUser?.email,
+    staleTime: 30000, // Cache pendant 30 secondes
+  });
 
   /**
    * IDs des utilisateurs suivis (mock temporaire)
@@ -81,14 +107,14 @@ export default function Feed() {
   useEffect(() => {
     if (!isMounted) return; // Attend que le composant soit monté
 
-    const viewStory = searchParams.get('view_story');
-    const userEmail = searchParams.get('user_email');
+    const viewStory = searchParams.get("view_story");
+    const userEmail = searchParams.get("user_email");
 
-    if (viewStory === 'true' && userEmail) {
+    if (viewStory === "true" && userEmail) {
       // Trouve les stories de l'utilisateur spécifié
       const userStories = stories.filter(
-        (story: any) => 
-          story.created_by === userEmail || 
+        (story: any) =>
+          story.created_by === userEmail ||
           story.author_name === userEmail ||
           story.author === userEmail
       );
@@ -98,7 +124,7 @@ export default function Feed() {
         setViewingStories(userStories);
 
         // Nettoie l'URL après avoir ouvert la story pour éviter la réouverture au rafraîchissement
-        router.replace('/feed', { scroll: false });
+        router.replace("/feed", { scroll: false });
       }
     }
   }, [searchParams, stories, router, isMounted]);
@@ -294,11 +320,21 @@ export default function Feed() {
             </motion.button>
             <motion.button
               whileTap={{ scale: 0.9 }}
+              onClick={() => router.push("/activity")}
               className="relative w-10 h-10 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors"
               aria-label="Notifications"
             >
               <Bell className="w-6 h-6 text-gray-900" />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full" />
+              {/* Badge rouge si notifications non lues */}
+              {unreadNotificationsCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 min-w-[18px] h-[18px] bg-red-500 rounded-full flex items-center justify-center px-1">
+                  <span className="text-[10px] font-bold text-white">
+                    {unreadNotificationsCount > 9
+                      ? "9+"
+                      : unreadNotificationsCount}
+                  </span>
+                </span>
+              )}
             </motion.button>
           </div>
         </div>
@@ -339,7 +375,7 @@ export default function Feed() {
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
-            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center mb-4">
+            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center mb-4">
               <span className="text-3xl">📸</span>
             </div>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">

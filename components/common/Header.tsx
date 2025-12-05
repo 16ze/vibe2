@@ -1,6 +1,5 @@
-import React from 'react';
-import { motion } from 'framer-motion';
-import { Bell, Search, Plus } from 'lucide-react';
+import { motion } from "framer-motion";
+import { Bell, Plus, Search } from "lucide-react";
 
 interface HeaderProps {
   title?: string;
@@ -19,7 +18,7 @@ interface HeaderProps {
 /**
  * Composant Header réutilisable
  * Affiche une icône + à la place du logo (pour créer un status) et les actions
- * 
+ *
  * @param title - Titre à afficher (optionnel, non utilisé si onCompose est fourni)
  * @param showSearch - Afficher le bouton de recherche
  * @param showNotifications - Afficher le bouton de notifications
@@ -29,15 +28,15 @@ interface HeaderProps {
  * @param onAdd - Callback pour le bouton d'ajout
  * @param onCompose - Callback pour l'icône + (ouvre le modal de création)
  */
-export default function Header({ 
-  title = 'VIBE', 
-  showSearch = true, 
-  showNotifications = true, 
-  showAdd = false, 
-  onSearch, 
-  onNotifications, 
+export default function Header({
+  title = "VIBE",
+  showSearch = true,
+  showNotifications = true,
+  showAdd = false,
+  onSearch,
+  onNotifications,
   onAdd,
-  onCompose 
+  onCompose,
 }: HeaderProps) {
   return (
     <header className="bg-white/95 backdrop-blur-md border-b border-gray-100">
@@ -53,11 +52,11 @@ export default function Header({
             <Plus className="w-6 h-6 text-gray-900" strokeWidth={2.5} />
           </motion.button>
         ) : (
-          <h1 className="text-2xl font-black tracking-tight bg-gradient-to-r from-purple-600 via-pink-500 to-orange-400 bg-clip-text text-transparent">
+          <h1 className="text-2xl font-black tracking-tight text-gradient-vibe">
             {title}
           </h1>
         )}
-        
+
         <div className="flex items-center gap-1">
           {showAdd && (
             <motion.button

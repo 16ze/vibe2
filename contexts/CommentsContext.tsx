@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, ReactNode } from "react";
+import { createContext, ReactNode, useContext, useState } from "react";
 
 /**
  * Interface pour le contexte des commentaires
@@ -95,4 +95,3 @@ export function useComments() {
   }
   return context;
 }
-

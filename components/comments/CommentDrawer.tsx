@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { X, Send, Heart } from "lucide-react";
+import { useUI } from "@/contexts/UIContext";
 import { formatDistanceToNow } from "date-fns";
+import { AnimatePresence, motion } from "framer-motion";
+import { Heart, Send, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 /**
  * Props du composant CommentDrawer
@@ -104,10 +105,37 @@ export default function CommentDrawer({
   onClose,
   postId,
 }: CommentDrawerProps) {
+  /**
+   * Récupère les fonctions pour masquer/afficher la BottomNav
+   */
+  const { hideBottomNav, showBottomNav } = useUI();
+
   // Charge tous les commentaires mock (dans un vrai app, ça viendrait de l'API/localStorage)
   const [allComments, setAllComments] = useState<Comment[]>(
     getAllMockComments()
   );
+
+  /**
+   * Masque la BottomNav quand le drawer est ouvert
+   * La réaffiche quand le drawer est fermé
+   * Pattern robuste avec délai de sécurité pour les animations
+   */
+  useEffect(() => {
+    if (isOpen) {
+      hideBottomNav();
+    } else {
+      // Délai de sécurité pour laisser l'animation de fermeture se finir si besoin
+      const timer = setTimeout(() => {
+        showBottomNav();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+
+    // Sécurité ultime au démontage
+    return () => {
+      showBottomNav();
+    };
+  }, [isOpen, hideBottomNav, showBottomNav]);
   const [newComment, setNewComment] = useState("");
   const [likedComments, setLikedComments] = useState<Set<string>>(new Set());
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -305,7 +333,7 @@ export default function CommentDrawer({
                   {postComments.map((comment) => (
                     <div key={comment.id} className="flex gap-3">
                       {/* Avatar */}
-                      <div className="w-10 h-10 rounded-full overflow-hidden bg-gradient-to-br from-purple-100 to-pink-100 flex-shrink-0">
+                      <div className="w-10 h-10 rounded-full overflow-hidden bg-gradient-to-br from-indigo-100 to-purple-100 flex-shrink-0">
                         {comment.author_avatar ? (
                           <img
                             src={comment.author_avatar}
@@ -314,7 +342,8 @@ export default function CommentDrawer({
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-purple-600 font-bold text-sm">
-                            {comment.author_name?.charAt(0)?.toUpperCase() || "U"}
+                            {comment.author_name?.charAt(0)?.toUpperCase() ||
+                              "U"}
                           </div>
                         )}
                       </div>
@@ -417,4 +446,3 @@ export default function CommentDrawer({
     </AnimatePresence>
   );
 }
-

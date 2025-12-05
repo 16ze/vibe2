@@ -164,26 +164,32 @@ export type Post = MediaPost | TextPost;
  * Mapping des presets de fond vers leurs classes CSS Tailwind
  */
 export const backgroundPresets: Record<string, string> = {
+  // Electric Vibe (Principal)
+  "vibe-electric":
+    "bg-gradient-to-br from-indigo-600 via-purple-600 to-cyan-500",
+  "vibe-purple":
+    "bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-500",
+  "vibe-glow": "bg-gradient-to-br from-indigo-500 via-purple-500 to-cyan-400",
+
   // Classiques VIBE
-  "vibe-purple": "bg-gradient-to-br from-purple-600 via-violet-600 to-pink-500",
-  "vibe-sunset": "bg-gradient-to-br from-orange-500 via-pink-500 to-purple-600",
   "vibe-dark": "bg-gradient-to-br from-gray-900 via-black to-gray-800",
   "vibe-ocean": "bg-gradient-to-br from-blue-600 via-cyan-600 to-teal-500",
   "vibe-fire": "bg-gradient-to-br from-red-600 via-orange-500 to-yellow-500",
   "vibe-aurora": "bg-gradient-to-br from-green-500 via-teal-500 to-blue-600",
   "vibe-midnight": "bg-gradient-to-br from-indigo-900 via-purple-900 to-black",
   "vibe-gradient":
-    "bg-gradient-to-br from-purple-500 via-pink-500 to-orange-500",
+    "bg-gradient-to-br from-indigo-500 via-purple-500 to-cyan-500",
 
-  // Nouveaux dégradés modernes
-  "vibe-neon": "bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500",
-  "vibe-electric": "bg-gradient-to-br from-cyan-400 via-blue-500 to-purple-600",
+  // Dégradés modernes
+  "vibe-neon": "bg-gradient-to-br from-indigo-500 via-purple-500 to-violet-500",
+  "vibe-cyber": "bg-gradient-to-br from-cyan-400 via-blue-500 to-indigo-600",
   "vibe-tropical":
     "bg-gradient-to-br from-green-400 via-emerald-500 to-teal-600",
-  "vibe-coral": "bg-gradient-to-br from-rose-400 via-pink-500 to-fuchsia-600",
+  "vibe-coral": "bg-gradient-to-br from-rose-400 via-red-500 to-orange-600",
   "vibe-gold": "bg-gradient-to-br from-amber-400 via-orange-500 to-red-500",
   "vibe-space": "bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900",
-  "vibe-candy": "bg-gradient-to-tr from-pink-400 via-purple-400 to-indigo-400",
+  "vibe-candy":
+    "bg-gradient-to-tr from-violet-400 via-purple-400 to-indigo-400",
   "vibe-forest": "bg-gradient-to-br from-emerald-800 via-green-700 to-teal-800",
 };
 

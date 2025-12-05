@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { X, ChevronLeft, ChevronRight, Heart, Send } from 'lucide-react';
+import MediaRenderer from "@/components/common/MediaRenderer";
+import { motion } from "framer-motion";
+import { Heart, Send, X } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
 
 interface StoryViewerProps {
   stories: any[];
@@ -8,7 +9,11 @@ interface StoryViewerProps {
   onClose?: () => void;
 }
 
-export default function StoryViewer({ stories, initialIndex = 0, onClose }: StoryViewerProps) {
+export default function StoryViewer({
+  stories,
+  initialIndex = 0,
+  onClose,
+}: StoryViewerProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [progress, setProgress] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
@@ -23,8 +28,8 @@ export default function StoryViewer({ stories, initialIndex = 0, onClose }: Stor
   useEffect(() => {
     if (!story) return;
     if (isPaused || isCommenting) return; // Arrête le timer si en pause ou en mode commentaire
-    
-    const duration = story.media_type === 'video' ? 15000 : 5000;
+
+    const duration = story.media_type === "video" ? 15000 : 5000;
     const interval = 50;
     const increment = (interval / duration) * 100;
 
@@ -50,13 +55,13 @@ export default function StoryViewer({ stories, initialIndex = 0, onClose }: Stor
    * Gère la vidéo : pause si isPaused (hold), play sinon (normal ou commentaire)
    */
   useEffect(() => {
-    if (!videoRef.current || story?.media_type !== 'video') return;
+    if (!videoRef.current || story?.media_type !== "video") return;
 
     if (isPaused) {
       videoRef.current.pause();
     } else {
       videoRef.current.play().catch((err) => {
-        console.error('Error playing video:', err);
+        console.error("Error playing video:", err);
       });
     }
   }, [isPaused, story?.media_type]);
@@ -97,7 +102,7 @@ export default function StoryViewer({ stories, initialIndex = 0, onClose }: Stor
     setProgress(0);
     setIsPaused(false);
     setIsCommenting(false);
-    
+
     // Nettoie le timer de hold si présent
     if (holdTimerRef.current) {
       clearTimeout(holdTimerRef.current);
@@ -149,11 +154,19 @@ export default function StoryViewer({ stories, initialIndex = 0, onClose }: Stor
       {/* Progress bars */}
       <div className="absolute top-0 inset-x-0 z-20 flex gap-1 px-2 pt-safe py-2">
         {stories.map((_, idx) => (
-          <div key={idx} className="flex-1 h-0.5 bg-white/30 rounded-full overflow-hidden">
-            <div 
+          <div
+            key={idx}
+            className="flex-1 h-0.5 bg-white/30 rounded-full overflow-hidden"
+          >
+            <div
               className="h-full bg-white rounded-full transition-all duration-50"
-              style={{ 
-                width: idx < currentIndex ? '100%' : idx === currentIndex ? `${progress}%` : '0%' 
+              style={{
+                width:
+                  idx < currentIndex
+                    ? "100%"
+                    : idx === currentIndex
+                    ? `${progress}%`
+                    : "0%",
               }}
             />
           </div>
@@ -166,15 +179,21 @@ export default function StoryViewer({ stories, initialIndex = 0, onClose }: Stor
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-700">
               {story.author_avatar ? (
-                <img src={story.author_avatar} alt="" className="w-full h-full object-cover" />
+                <img
+                  src={story.author_avatar}
+                  alt=""
+                  className="w-full h-full object-cover"
+                />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-white font-semibold">
-                  {story.author_name?.charAt(0)?.toUpperCase() || 'V'}
+                  {story.author_name?.charAt(0)?.toUpperCase() || "V"}
                 </div>
               )}
             </div>
             <div>
-              <p className="text-white font-semibold text-sm">{story.author_name}</p>
+              <p className="text-white font-semibold text-sm">
+                {story.author_name}
+              </p>
               <p className="text-white/60 text-xs">il y a 2h</p>
             </div>
           </div>
@@ -184,37 +203,30 @@ export default function StoryViewer({ stories, initialIndex = 0, onClose }: Stor
         </div>
       </div>
 
-      {/* Media */}
+      {/* Media - Utilise MediaRenderer pour gérer IndexedDB et URLs classiques */}
       <div className="absolute inset-0 flex items-center justify-center">
-        {story.media_type === 'video' ? (
-          <video 
-            ref={videoRef}
-            src={story.media_url} 
-            className="w-full h-full object-contain"
-            autoPlay
-            playsInline
-            muted
-            loop={isCommenting} // Loop uniquement en mode commentaire
-          />
-        ) : (
-          <img 
-            src={story.media_url} 
-            alt="" 
-            className="w-full h-full object-contain"
-          />
-        )}
+        <MediaRenderer
+          ref={videoRef as React.Ref<HTMLVideoElement>}
+          src={story.media_url}
+          type={story.media_type === "video" ? "video" : "image"}
+          className="w-full h-full object-contain"
+          autoPlay={story.media_type === "video"}
+          playsInline={story.media_type === "video"}
+          muted={story.media_type === "video"}
+          loop={story.media_type === "video" && isCommenting} // Loop uniquement en mode commentaire
+        />
       </div>
 
       {/* Touch areas for navigation */}
       <div className="absolute inset-0 flex z-10">
-        <button 
-          onClick={handlePrev} 
+        <button
+          onClick={handlePrev}
           className="w-1/3 h-full"
           aria-label="Previous"
         />
         <div className="w-1/3" />
-        <button 
-          onClick={handleNext} 
+        <button
+          onClick={handleNext}
           className="w-1/3 h-full"
           aria-label="Next"
         />

@@ -28,8 +28,5 @@
       "format": "date-time"
     }
   },
-  "required": [
-    "follower_email",
-    "following_email"
-  ]
+  "required": ["follower_email", "following_email"]
 }

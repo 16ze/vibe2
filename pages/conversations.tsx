@@ -1,15 +1,24 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { vibe } from '@/api/vibeClient';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Loader2, MessageCircle, UserPlus, MapPin, SquarePen } from 'lucide-react';
-import ConversationItem from '@/components/chat/ConversationItem';
-import ChatView from '@/components/chat/ChatView';
-import UserSelectorModal from '@/components/chat/UserSelectorModal';
-import AddFriendModal from '@/components/chat/AddFriendModal';
-import { useRouter } from 'next/navigation';
+import { vibe } from "@/api/vibeClient";
+import AddFriendModal from "@/components/chat/AddFriendModal";
+import ChatView from "@/components/chat/ChatView";
+import ConversationItem from "@/components/chat/ConversationItem";
+import UserSelectorModal from "@/components/chat/UserSelectorModal";
+import { useUI } from "@/contexts/UIContext";
+import { useSwipeNavigation } from "@/hooks/useSwipeNavigation";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { motion } from "framer-motion";
+import {
+  Loader2,
+  MapPin,
+  MessageCircle,
+  Search,
+  SquarePen,
+  UserPlus,
+} from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 export default function Conversations() {
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -23,10 +32,53 @@ export default function Conversations() {
   const router = useRouter();
 
   /**
+   * Récupère les fonctions pour masquer/afficher la BottomNav
+   */
+  const { showBottomNav } = useUI();
+
+  /**
+   * Navigation par swipe : Camera <- Conversations -> Profile
+   * Désactivé quand un modal ou un chat est ouvert
+   */
+  const isSwipeDisabled =
+    !!selectedConversation ||
+    isUserSelectorOpen ||
+    isAddFriendOpen ||
+    isSearchOpen;
+  useSwipeNavigation({
+    onSwipeRight: "/camera",
+    onSwipeLeft: "/profile",
+    disabled: isSwipeDisabled,
+  });
+
+  /**
+   * S'assure que la BottomNav est visible au montage de la page
+   * Important après navigation depuis une page qui la masque (ex: map)
+   * showBottomNav est stable grâce à useCallback, donc pas de boucle
+   */
+  useEffect(() => {
+    // Réaffiche immédiatement la BottomNav
+    showBottomNav();
+
+    // Sécurité supplémentaire avec un petit délai
+    const timer = setTimeout(() => {
+      showBottomNav();
+    }, 100);
+
+    return () => {
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Une seule fois au montage, showBottomNav est stable
+
+  /**
    * Récupère l'utilisateur actuel
    */
   useEffect(() => {
-    vibe.auth.me().then(setCurrentUser).catch(() => {});
+    vibe.auth
+      .me()
+      .then(setCurrentUser)
+      .catch(() => {});
   }, []);
 
   /**
@@ -39,7 +91,7 @@ export default function Conversations() {
       try {
         const stories = await vibe.entities.Story.filter(
           { created_by: currentUser.email },
-          '-created_date'
+          "-created_date"
         );
         const now = new Date();
         const activeStory = stories.find((story: any) => {
@@ -48,7 +100,7 @@ export default function Conversations() {
         });
         setHasActiveStory(!!activeStory);
       } catch (err) {
-        console.error('Error checking active story:', err);
+        console.error("Error checking active story:", err);
       }
     };
 
@@ -67,18 +119,18 @@ export default function Conversations() {
       try {
         const existingConversations = await vibe.entities.Conversation.filter(
           { created_by: currentUser.email },
-          '-last_message_at'
+          "-last_message_at"
         );
 
         // Si aucune conversation n'existe, crée une conversation de bienvenue
         if (existingConversations.length === 0) {
           const welcomeConversation = await vibe.entities.Conversation.create({
-            participant_name: 'Team Vibe',
+            participant_name: "Team Vibe",
             participant_avatar: null,
-            participant_email: 'team@vibe.app',
-            last_message: 'Bienvenue sur Vibe !',
+            participant_email: "team@vibe.app",
+            last_message: "Bienvenue sur Vibe !",
             last_message_at: new Date().toISOString(),
-            last_message_type: 'text', // Type du dernier message pour l'icône
+            last_message_type: "text", // Type du dernier message pour l'icône
             unread_count: 1,
             is_online: false,
             created_by: currentUser.email,
@@ -88,18 +140,21 @@ export default function Conversations() {
           // Crée le message de bienvenue
           await vibe.entities.Message.create({
             conversation_id: welcomeConversation.id,
-            sender_email: 'team@vibe.app',
-            sender_name: 'Team Vibe',
-            content: 'Bienvenue sur Vibe !\n\nCommence à partager tes moments avec tes amis.',
-            media_type: 'text',
+            sender_email: "team@vibe.app",
+            sender_name: "Team Vibe",
+            content:
+              "Bienvenue sur Vibe !\n\nCommence à partager tes moments avec tes amis.",
+            media_type: "text",
             created_date: new Date().toISOString(),
           });
 
           // Invalide le cache pour rafraîchir la liste
-          queryClient.invalidateQueries({ queryKey: ['conversations', currentUser.email] });
+          queryClient.invalidateQueries({
+            queryKey: ["conversations", currentUser.email],
+          });
         }
       } catch (error) {
-        console.error('Error creating welcome conversation:', error);
+        console.error("Error creating welcome conversation:", error);
       }
     };
 
@@ -109,19 +164,23 @@ export default function Conversations() {
   }, [currentUser, queryClient]);
 
   const { data: conversations = [], isLoading } = useQuery({
-    queryKey: ['conversations', currentUser?.email],
+    queryKey: ["conversations", currentUser?.email],
     queryFn: async () => {
       if (!currentUser?.email) return [];
-      
+
       const convs = await vibe.entities.Conversation.filter(
         { created_by: currentUser.email },
-        '-last_message_at'
+        "-last_message_at"
       );
-      
+
       // Trie par updatedAt (last_message_at) - le plus récent en haut
       return convs.sort((a: any, b: any) => {
-        const dateA = new Date(a.last_message_at || a.created_date || 0).getTime();
-        const dateB = new Date(b.last_message_at || b.created_date || 0).getTime();
+        const dateA = new Date(
+          a.last_message_at || a.created_date || 0
+        ).getTime();
+        const dateB = new Date(
+          b.last_message_at || b.created_date || 0
+        ).getTime();
         return dateB - dateA;
       });
     },
@@ -132,22 +191,27 @@ export default function Conversations() {
   /**
    * Filtre les conversations selon la recherche
    */
-  const filteredConversations = isSearchOpen && searchQuery
-    ? conversations.filter((conv) =>
-        conv.participant_name?.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : conversations;
+  const filteredConversations =
+    isSearchOpen && searchQuery
+      ? conversations.filter((conv) =>
+          conv.participant_name
+            ?.toLowerCase()
+            .includes(searchQuery.toLowerCase())
+        )
+      : conversations;
 
   /**
    * Gère le clic sur l'avatar (redirige vers story ou profile)
    */
   const handleAvatarClick = () => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === "undefined") return;
 
     if (hasActiveStory && currentUser?.email) {
-      window.location.href = `/feed?view_story=true&user_email=${encodeURIComponent(currentUser.email)}`;
+      window.location.href = `/feed?view_story=true&user_email=${encodeURIComponent(
+        currentUser.email
+      )}`;
     } else {
-      router.push('/profile');
+      router.push("/profile");
     }
   };
 
@@ -196,7 +260,9 @@ export default function Conversations() {
         });
 
         // Invalide le cache pour rafraîchir la liste
-        queryClient.invalidateQueries({ queryKey: ["conversations", currentUser.email] });
+        queryClient.invalidateQueries({
+          queryKey: ["conversations", currentUser.email],
+        });
 
         // Ouvre la nouvelle conversation
         setSelectedConversation(newConversation);
@@ -214,63 +280,19 @@ export default function Conversations() {
   };
 
   /**
-   * Fonction de simulation : Crée une fausse demande d'ami pour tester
-   */
-  const simulateFriendRequest = async () => {
-    if (!currentUser?.email) return;
-
-    try {
-      // Vérifie si l'utilisateur test existe déjà
-      const allUsers = await vibe.integrations.Core.getAllUsers();
-      const testUser = allUsers.find((u: any) => u.email === "test@example.com");
-
-      if (!testUser) {
-        // Crée l'utilisateur test s'il n'existe pas
-        // Note: Cette fonctionnalité nécessiterait une méthode createUser dans vibeClient
-        // Pour l'instant, on crée juste la relation
-        console.log("Utilisateur test non trouvé, création de la relation uniquement");
-      }
-
-      // Vérifie si la demande existe déjà
-      const existing = await vibe.entities.Follow.filter({
-        follower_email: "test@example.com",
-        following_email: currentUser.email,
-      });
-
-      if (existing.length === 0) {
-        // Crée une demande d'ami de la part de "User Test"
-        await vibe.entities.Follow.create({
-          follower_email: "test@example.com",
-          following_email: currentUser.email,
-          status: "REQUEST_RECEIVED",
-          created_date: new Date().toISOString(),
-        });
-
-        // Invalide le cache pour rafraîchir
-        queryClient.invalidateQueries({ queryKey: ["relationships", currentUser.email] });
-        
-        alert("Demande d'ami simulée créée ! Ouvrez la modale 'Ajouter des amis' et allez dans l'onglet 'Demandes Reçues'.");
-      } else {
-        alert("Une demande d'ami de test existe déjà !");
-      }
-    } catch (error) {
-      console.error("Error simulating friend request:", error);
-      alert("Erreur lors de la simulation. Vérifiez la console.");
-    }
-  };
-
-  /**
    * Gère le retour depuis ChatView et rafraîchit la liste
    */
   const handleBackFromChat = () => {
     setSelectedConversation(null);
     // Rafraîchit la liste des conversations pour afficher les changements d'état
-    queryClient.invalidateQueries({ queryKey: ['conversations', currentUser?.email] });
+    queryClient.invalidateQueries({
+      queryKey: ["conversations", currentUser?.email],
+    });
   };
 
   if (selectedConversation) {
     return (
-      <ChatView 
+      <ChatView
         conversation={selectedConversation}
         currentUser={currentUser}
         onBack={handleBackFromChat}
@@ -294,17 +316,23 @@ export default function Conversations() {
               <div
                 className={`relative w-10 h-10 rounded-full overflow-hidden ${
                   hasActiveStory
-                    ? 'p-[2px] bg-gradient-to-tr from-amber-400 via-rose-500 to-purple-600'
-                    : ''
+                    ? "p-[2px] bg-gradient-to-tr from-amber-400 via-rose-500 to-purple-600"
+                    : ""
                 }`}
               >
-                <div className={`w-full h-full rounded-full overflow-hidden ${
-                  hasActiveStory ? 'bg-white' : ''
-                }`}>
+                <div
+                  className={`w-full h-full rounded-full overflow-hidden ${
+                    hasActiveStory ? "bg-white" : ""
+                  }`}
+                >
                   {currentUser?.avatar_url ? (
                     <img
                       src={currentUser.avatar_url}
-                      alt={currentUser.full_name || currentUser.username || 'Avatar'}
+                      alt={
+                        currentUser.full_name ||
+                        currentUser.username ||
+                        "Avatar"
+                      }
                       className="w-full h-full object-cover"
                     />
                   ) : (
@@ -312,7 +340,7 @@ export default function Conversations() {
                       {currentUser?.full_name?.charAt(0)?.toUpperCase() ||
                         currentUser?.username?.charAt(0)?.toUpperCase() ||
                         currentUser?.email?.charAt(0)?.toUpperCase() ||
-                        'U'}
+                        "U"}
                     </div>
                   )}
                 </div>
@@ -341,20 +369,7 @@ export default function Conversations() {
                 className="w-full max-w-xs px-3 py-1.5 bg-gray-100 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500/20"
               />
             ) : (
-              <>
-                <h1 className="text-xl font-bold text-gray-900">Vibe</h1>
-                {/* Bouton de simulation temporaire (à retirer en production) */}
-                {typeof window !== 'undefined' && window.location.hostname === 'localhost' && (
-                  <motion.button
-                    whileTap={{ scale: 0.9 }}
-                    onClick={simulateFriendRequest}
-                    className="ml-2 px-2 py-1 text-xs bg-blue-500 text-white rounded"
-                    title="Simuler une demande d'ami"
-                  >
-                    Test
-                  </motion.button>
-                )}
-              </>
+              <h1 className="text-xl font-bold text-gray-900">Vibe</h1>
             )}
           </div>
 
@@ -401,8 +416,12 @@ export default function Conversations() {
             <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center mb-4">
               <MessageCircle className="w-10 h-10 text-blue-500" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Aucune conversation</h3>
-            <p className="text-gray-500 text-sm">Commence à discuter avec tes amis !</p>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              Aucune conversation
+            </h3>
+            <p className="text-gray-500 text-sm">
+              Commence à discuter avec tes amis !
+            </p>
           </div>
         ) : (
           <div className="divide-y divide-gray-50">

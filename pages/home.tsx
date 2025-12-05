@@ -1,7 +1,6 @@
 "use client";
 
 import { vibe } from "@/api/vibeClient";
-import BottomNav from "@/components/common/bottomNav";
 import { AnimatePresence, motion } from "framer-motion";
 import React, { useEffect, useRef, useState } from "react";
 import Camera from "./camera";
@@ -36,17 +35,17 @@ export default function Home() {
    * Écoute les événements pour masquer/afficher la BottomNav
    */
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === "undefined") return;
 
     const handleHideBottomNav = () => setHideBottomNav(true);
     const handleShowBottomNav = () => setHideBottomNav(false);
 
-    window.addEventListener('hide-bottom-nav', handleHideBottomNav);
-    window.addEventListener('show-bottom-nav', handleShowBottomNav);
+    window.addEventListener("hide-bottom-nav", handleHideBottomNav);
+    window.addEventListener("show-bottom-nav", handleShowBottomNav);
 
     return () => {
-      window.removeEventListener('hide-bottom-nav', handleHideBottomNav);
-      window.removeEventListener('show-bottom-nav', handleShowBottomNav);
+      window.removeEventListener("hide-bottom-nav", handleHideBottomNav);
+      window.removeEventListener("show-bottom-nav", handleShowBottomNav);
     };
   }, []);
 
@@ -128,15 +127,7 @@ export default function Home() {
         </motion.div>
       </AnimatePresence>
 
-      {/* Bottom navigation - cachée sur la caméra et dans les conversations individuelles */}
-      {activeIndex !== 2 && !hideBottomNav && (
-        <BottomNav
-          activeIndex={activeIndex}
-          onNavigate={handleNavigate}
-          variant={isDarkNav ? "dark" : "light"}
-          userAvatar={currentUser?.avatar_url}
-        />
-      )}
+      {/* BottomNav est maintenant dans le Layout global */}
     </div>
   );
 }

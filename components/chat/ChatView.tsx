@@ -1,10 +1,17 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { vibe } from '@/api/vibeClient';
-import { motion } from 'framer-motion';
-import { ChevronLeft, Phone, Video, Info, Loader2, MessageCircle } from 'lucide-react';
-import MessageBubble from '@/components/chat/MessageBubble';
-import ChatInput from '@/components/chat/ChatInput';
+import { vibe } from "@/api/vibeClient";
+import ChatInput from "@/components/chat/ChatInput";
+import MessageBubble from "@/components/chat/MessageBubble";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { motion } from "framer-motion";
+import {
+  ChevronLeft,
+  Info,
+  Loader2,
+  MessageCircle,
+  Phone,
+  Video,
+} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 interface ChatViewProps {
   conversation: any;
@@ -12,7 +19,11 @@ interface ChatViewProps {
   onBack: () => void;
 }
 
-export default function ChatView({ conversation, currentUser, onBack }: ChatViewProps) {
+export default function ChatView({
+  conversation,
+  currentUser,
+  onBack,
+}: ChatViewProps) {
   const [replyingTo, setReplyingTo] = useState<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
@@ -21,12 +32,12 @@ export default function ChatView({ conversation, currentUser, onBack }: ChatView
    * Masque la BottomNav quand ChatView est monté
    */
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('hide-bottom-nav'));
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("hide-bottom-nav"));
     }
     return () => {
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('show-bottom-nav'));
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("show-bottom-nav"));
       }
     };
   }, []);
@@ -46,9 +57,11 @@ export default function ChatView({ conversation, currentUser, onBack }: ChatView
         });
 
         // Invalide le cache pour rafraîchir la liste des conversations
-        queryClient.invalidateQueries({ queryKey: ['conversations', currentUser?.email] });
+        queryClient.invalidateQueries({
+          queryKey: ["conversations", currentUser?.email],
+        });
       } catch (error) {
-        console.error('Error marking conversation as read:', error);
+        console.error("Error marking conversation as read:", error);
       }
     };
 
@@ -56,11 +69,11 @@ export default function ChatView({ conversation, currentUser, onBack }: ChatView
   }, [conversation?.id, currentUser?.email, queryClient]);
 
   const { data: messages = [], isLoading } = useQuery({
-    queryKey: ['messages', conversation.id],
+    queryKey: ["messages", conversation.id],
     queryFn: async () => {
       const msgs = await vibe.entities.Message.filter(
         { conversation_id: conversation.id },
-        'created_date'
+        "created_date"
       );
       // Trie par date croissante (les plus anciens en haut)
       return msgs.sort((a: any, b: any) => {
@@ -77,31 +90,36 @@ export default function ChatView({ conversation, currentUser, onBack }: ChatView
       const newMessage = await vibe.entities.Message.create({
         conversation_id: conversation.id,
         sender_email: currentUser.email,
-        sender_name: currentUser.full_name || currentUser.email?.split('@')[0] || 'Moi',
-        media_type: 'text',
+        sender_name:
+          currentUser.full_name || currentUser.email?.split("@")[0] || "Moi",
+        media_type: "text",
         created_date: new Date().toISOString(),
-        ...(messageData || {})
+        ...(messageData || {}),
       });
 
       // Met à jour la conversation avec le dernier message
       await vibe.entities.Conversation.update(conversation.id, {
-        last_message: messageData?.content || 'Nouveau message',
+        last_message: messageData?.content || "Nouveau message",
         last_message_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        last_message_type: messageData?.media_type || 'text', // Stocke le type pour l'icône
+        last_message_type: messageData?.media_type || "text", // Stocke le type pour l'icône
       });
 
       return newMessage;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['messages', conversation.id] });
-      queryClient.invalidateQueries({ queryKey: ['conversations', currentUser?.email] });
-      
+      queryClient.invalidateQueries({
+        queryKey: ["messages", conversation.id],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["conversations", currentUser?.email],
+      });
+
       // Scroll vers le bas après un court délai pour laisser le message s'afficher
       setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
       }, 100);
-    }
+    },
   });
 
   /**
@@ -111,7 +129,7 @@ export default function ChatView({ conversation, currentUser, onBack }: ChatView
     if (messages.length > 0 && !isLoading) {
       // Scroll immédiat au chargement initial (sans animation)
       setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+        messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
       }, 100);
     }
   }, [isLoading, messages.length]);
@@ -122,7 +140,7 @@ export default function ChatView({ conversation, currentUser, onBack }: ChatView
   useEffect(() => {
     if (messages.length > 0) {
       const timer = setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
       }, 150);
       return () => clearTimeout(timer);
     }
@@ -144,19 +162,20 @@ export default function ChatView({ conversation, currentUser, onBack }: ChatView
           >
             <ChevronLeft className="w-6 h-6 text-gray-900" />
           </motion.button>
-          
+
           <div className="flex items-center gap-3">
             <div className="relative">
               <div className="w-10 h-10 rounded-full overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200">
                 {conversation.participant_avatar ? (
-                  <img 
-                    src={conversation.participant_avatar} 
-                    alt="" 
+                  <img
+                    src={conversation.participant_avatar}
+                    alt=""
                     className="w-full h-full object-cover"
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-gray-500 font-semibold">
-                    {conversation.participant_name?.charAt(0)?.toUpperCase() || 'U'}
+                    {conversation.participant_name?.charAt(0)?.toUpperCase() ||
+                      "U"}
                   </div>
                 )}
               </div>
@@ -166,10 +185,10 @@ export default function ChatView({ conversation, currentUser, onBack }: ChatView
             </div>
             <div>
               <h2 className="font-semibold text-gray-900 text-sm">
-                {conversation.participant_name || 'Utilisateur'}
+                {conversation.participant_name || "Utilisateur"}
               </h2>
               <p className="text-xs text-gray-500">
-                {conversation.is_online ? 'En ligne' : 'Hors ligne'}
+                {conversation.is_online ? "En ligne" : "Hors ligne"}
               </p>
             </div>
           </div>
@@ -206,11 +225,13 @@ export default function ChatView({ conversation, currentUser, onBack }: ChatView
             {messages.map((message, index) => {
               const isOwn = message.sender_email === currentUser?.email;
               const prevMessage = index > 0 ? messages[index - 1] : null;
-              const showAvatar = !isOwn && (
-                !prevMessage || 
-                prevMessage.sender_email !== message.sender_email ||
-                new Date(message.created_date).getTime() - new Date(prevMessage.created_date).getTime() > 300000 // 5 minutes
-              );
+              const showAvatar =
+                !isOwn &&
+                (!prevMessage ||
+                  prevMessage.sender_email !== message.sender_email ||
+                  new Date(message.created_date).getTime() -
+                    new Date(prevMessage.created_date).getTime() >
+                    300000); // 5 minutes
 
               return (
                 <MessageBubble
@@ -219,7 +240,9 @@ export default function ChatView({ conversation, currentUser, onBack }: ChatView
                   isOwn={isOwn}
                   showAvatar={showAvatar}
                   avatar={conversation.participant_avatar}
-                  senderName={conversation.participant_name || message.sender_name}
+                  senderName={
+                    conversation.participant_name || message.sender_name
+                  }
                 />
               );
             })}

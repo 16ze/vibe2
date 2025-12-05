@@ -3,7 +3,7 @@
  * Remplace base44 avec un système de stockage local
  */
 
-import { storage } from './localStorage';
+import { storage } from "./localStorage";
 
 /**
  * Classe pour gérer les entités (CRUD operations)
@@ -23,22 +23,22 @@ class EntityClient {
   async list(orderBy?: string, limit?: number): Promise<any[]> {
     try {
       let items = this.storageManager.getAll();
-      
+
       // Met à jour les compteurs pour les posts
       if (this.storageManager === storage.Post) {
         items = await this.updatePostsCounters(items);
       }
-      
+
       // Trie les éléments
       if (orderBy) {
         items = this.storageManager.sort(items, orderBy);
       }
-      
+
       // Limite le nombre d'éléments
       if (limit) {
         items = items.slice(0, limit);
       }
-      
+
       return items;
     } catch (error) {
       console.error(`Error listing:`, error);
@@ -54,15 +54,18 @@ class EntityClient {
   async filter(filters: Record<string, any>, orderBy?: string): Promise<any[]> {
     try {
       let items = this.storageManager.filter(filters);
-      
+
       // Trie les éléments
       if (orderBy) {
         items = this.storageManager.sort(items, orderBy);
       }
-      
+
       return items;
     } catch (error) {
-      console.error(`Error filtering ${this.storageManager.storageKey}:`, error);
+      console.error(
+        `Error filtering ${this.storageManager.storageKey}:`,
+        error
+      );
       return [];
     }
   }
@@ -74,19 +77,19 @@ class EntityClient {
   async create(data: Record<string, any>): Promise<any> {
     try {
       const currentUser = storage.User.getCurrentUser();
-      
+
       // Ajoute automatiquement les champs créateur si nécessaire
       if (!data.created_by && currentUser) {
         data.created_by = currentUser.email;
       }
-      
+
       const newItem = this.storageManager.add(data);
-      
+
       // Met à jour les compteurs si nécessaire
       if (data.post_id) {
         await this.updatePostCounters(data.post_id);
       }
-      
+
       return newItem;
     } catch (error) {
       console.error(`Error creating entity:`, error);
@@ -134,10 +137,10 @@ class EntityClient {
   private async updatePostCounters(postId: string): Promise<void> {
     const likes = storage.Like.filter({ post_id: postId });
     const comments = storage.Comment.filter({ post_id: postId });
-    
+
     const posts = storage.Post.getAll();
     const postIndex = posts.findIndex((p: any) => p.id === postId);
-    
+
     if (postIndex >= 0) {
       posts[postIndex].likes_count = likes.length;
       posts[postIndex].comments_count = comments.length;
@@ -172,11 +175,11 @@ class AuthClient {
     try {
       const user = storage.User.getCurrentUser();
       if (!user) {
-        throw new Error('No user logged in');
+        throw new Error("No user logged in");
       }
       return user;
     } catch (error) {
-      console.error('Error fetching current user:', error);
+      console.error("Error fetching current user:", error);
       // Retourne un utilisateur par défaut
       return storage.User.getCurrentUser();
     }
@@ -190,15 +193,15 @@ class AuthClient {
   async login(email: string, password: string): Promise<any> {
     try {
       const result = storage.User.login(email, password);
-      
+
       // Stocke le token (même si c'est local)
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('auth_token', result.token);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("auth_token", result.token);
       }
-      
+
       return result;
     } catch (error) {
-      console.error('Error logging in:', error);
+      console.error("Error logging in:", error);
       throw error;
     }
   }
@@ -209,18 +212,22 @@ class AuthClient {
    * @param password - Mot de passe
    * @param fullName - Nom complet
    */
-  async register(email: string, password: string, fullName?: string): Promise<any> {
+  async register(
+    email: string,
+    password: string,
+    fullName?: string
+  ): Promise<any> {
     try {
       const result = storage.User.register(email, password, fullName);
-      
+
       // Stocke le token
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('auth_token', result.token);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("auth_token", result.token);
       }
-      
+
       return result;
     } catch (error) {
-      console.error('Error registering:', error);
+      console.error("Error registering:", error);
       throw error;
     }
   }
@@ -230,9 +237,9 @@ class AuthClient {
    */
   async logout(): Promise<void> {
     storage.User.logout();
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('auth_token');
-      sessionStorage.removeItem('auth_token');
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("auth_token");
+      sessionStorage.removeItem("auth_token");
     }
   }
 }
@@ -249,7 +256,7 @@ class IntegrationsClient {
     try {
       return await storage.File.uploadFile(options.file);
     } catch (error) {
-      console.error('Error uploading file:', error);
+      console.error("Error uploading file:", error);
       // Retourne une URL blob de secours
       return {
         file_url: URL.createObjectURL(options.file),
@@ -265,7 +272,7 @@ class IntegrationsClient {
     try {
       return await storage.User.getAll();
     } catch (error) {
-      console.error('Error getting all users:', error);
+      console.error("Error getting all users:", error);
       return [];
     }
   }
@@ -277,13 +284,13 @@ class IntegrationsClient {
 export const vibe = {
   auth: new AuthClient(),
   entities: {
-    Post: new EntityClient('Post'),
-    Story: new EntityClient('Story'),
-    Like: new EntityClient('Like'),
-    Comment: new EntityClient('Comment'),
-    Conversation: new EntityClient('Conversation'),
-    Message: new EntityClient('Message'),
-    Follow: new EntityClient('Follow'),
+    Post: new EntityClient("Post"),
+    Story: new EntityClient("Story"),
+    Like: new EntityClient("Like"),
+    Comment: new EntityClient("Comment"),
+    Conversation: new EntityClient("Conversation"),
+    Message: new EntityClient("Message"),
+    Follow: new EntityClient("Follow"),
   },
   integrations: {
     Core: new IntegrationsClient(),
@@ -292,4 +299,3 @@ export const vibe = {
 
 // Export aussi sous le nom base44 pour la compatibilité avec le code existant
 export const base44 = vibe;
-

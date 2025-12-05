@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { X } from "lucide-react";
 import { vibe } from "@/api/vibeClient";
+import { useUI } from "@/contexts/UIContext";
 import { TextPost } from "@/types/post";
 import { useQueryClient } from "@tanstack/react-query";
+import { AnimatePresence, motion } from "framer-motion";
+import { useEffect, useRef, useState } from "react";
 
 /**
  * Props du composant ComposeModal
@@ -37,10 +37,36 @@ export default function ComposeModal({
   onClose,
   currentUser,
 }: ComposeModalProps) {
+  /**
+   * Récupère les fonctions pour masquer/afficher la BottomNav
+   */
+  const { hideBottomNav, showBottomNav } = useUI();
   const [content, setContent] = useState("");
   const [isPublishing, setIsPublishing] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const queryClient = useQueryClient();
+
+  /**
+   * Masque la BottomNav quand le modal est ouvert
+   * La réaffiche quand le modal est fermé
+   * Pattern robuste avec délai de sécurité pour les animations
+   */
+  useEffect(() => {
+    if (isOpen) {
+      hideBottomNav();
+    } else {
+      // Délai de sécurité pour laisser l'animation de fermeture se finir si besoin
+      const timer = setTimeout(() => {
+        showBottomNav();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+
+    // Sécurité ultime au démontage
+    return () => {
+      showBottomNav();
+    };
+  }, [isOpen, hideBottomNav, showBottomNav]);
 
   /**
    * Focus automatique sur le textarea quand le modal s'ouvre
@@ -190,9 +216,7 @@ export default function ComposeModal({
               </button>
 
               {/* Titre centré */}
-              <h2 className="text-lg font-bold text-gray-900">
-                Nouveau Vibe
-              </h2>
+              <h2 className="text-lg font-bold text-gray-900">Nouveau Vibe</h2>
 
               {/* Bouton Publier à droite */}
               <button
@@ -200,7 +224,7 @@ export default function ComposeModal({
                 disabled={!content.trim() || isPublishing}
                 className={`px-4 py-1.5 rounded-full font-semibold text-sm transition-all ${
                   content.trim() && !isPublishing
-                    ? "bg-gradient-to-r from-purple-600 via-pink-500 to-orange-400 text-white hover:opacity-90 shadow-md"
+                    ? "bg-gradient-vibe text-white hover:opacity-90 shadow-md glow-vibe"
                     : "bg-gray-200 text-gray-400 cursor-not-allowed"
                 }`}
               >
@@ -226,4 +250,3 @@ export default function ComposeModal({
     </AnimatePresence>
   );
 }
-

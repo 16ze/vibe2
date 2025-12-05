@@ -1,9 +1,17 @@
-'use client';
+"use client";
 
-import React, { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Heart, MessageCircle, Share2, Plus, Music, Play, Pause } from 'lucide-react';
-import MediaRenderer from '@/components/common/MediaRenderer';
+import MediaRenderer from "@/components/common/MediaRenderer";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  Heart,
+  MessageCircle,
+  Music,
+  Pause,
+  Play,
+  Plus,
+  Share2,
+} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 /**
  * Interface pour les props du composant VibeItem
@@ -13,68 +21,68 @@ interface VibeItemProps {
    * URL de la vidéo à afficher
    */
   videoUrl: string;
-  
+
   /**
    * Nom d'utilisateur de l'auteur
    */
   username: string;
-  
+
   /**
    * Avatar de l'auteur
    */
   avatarUrl?: string;
-  
+
   /**
    * Description de la vidéo
    */
   description: string;
-  
+
   /**
    * Nom de la musique
    */
   musicName: string;
-  
+
   /**
    * Nombre de likes
    */
   likesCount?: number;
-  
+
   /**
    * Nombre de commentaires
    */
   commentsCount?: number;
-  
+
   /**
    * Indique si l'utilisateur a déjà liké la vidéo
    */
   isLiked?: boolean;
-  
+
   /**
    * Indique si l'utilisateur suit déjà l'auteur
    */
   isFollowing?: boolean;
-  
+
   /**
    * Indique si cette vidéo est actuellement active (visible à l'écran)
    * Si true, la vidéo joue automatiquement
    */
   isActive?: boolean;
-  
+
   /**
    * Callback appelé lors du like
    */
   onLike?: () => void;
-  
+
   /**
    * Callback appelé lors du follow
    */
   onFollow?: () => void;
-  
+
   /**
    * Callback appelé lors du commentaire
    */
   onComment?: () => void;
-  
+
   /**
    * Callback appelé lors du partage
    */
@@ -119,7 +127,8 @@ export default function VibeItem({
   useEffect(() => {
     if (descriptionRef.current) {
       const isTruncated =
-        descriptionRef.current.scrollHeight > descriptionRef.current.clientHeight;
+        descriptionRef.current.scrollHeight >
+        descriptionRef.current.clientHeight;
       setIsDescriptionTruncated(isTruncated);
     }
   }, [description]);
@@ -159,7 +168,7 @@ export default function VibeItem({
     if (isActive && !isManuallyPaused) {
       // Joue la vidéo si elle est active et n'est pas en pause manuelle
       videoRef.current.play().catch((error) => {
-        console.error('Error playing video:', error);
+        console.error("Error playing video:", error);
       });
       setIsPlaying(true);
     } else {
@@ -191,12 +200,12 @@ export default function VibeItem({
 
     // Affiche l'icône Play/Pause brièvement
     setShowPlayIcon(true);
-    
+
     // Nettoie le timeout précédent
     if (playIconTimeoutRef.current) {
       clearTimeout(playIconTimeoutRef.current);
     }
-    
+
     // Cache l'icône après 1 seconde
     playIconTimeoutRef.current = setTimeout(() => {
       setShowPlayIcon(false);
@@ -210,7 +219,7 @@ export default function VibeItem({
     } else {
       // Joue manuellement
       videoRef.current.play().catch((error) => {
-        console.error('Error playing video:', error);
+        console.error("Error playing video:", error);
       });
       setIsPlaying(true);
       setIsManuallyPaused(false);
@@ -269,7 +278,7 @@ export default function VibeItem({
                 className="w-full h-full object-cover"
               />
             ) : (
-              <div className="w-full h-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+              <div className="w-full h-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center">
                 <span className="text-white text-lg font-bold">
                   {username[0]?.toUpperCase()}
                 </span>
@@ -281,14 +290,12 @@ export default function VibeItem({
             whileTap={{ scale: 0.9 }}
             onClick={onFollow}
             className={`absolute -bottom-1 left-1/2 -translate-x-1/2 w-6 h-6 rounded-full flex items-center justify-center ${
-              isFollowing
-                ? 'bg-gray-600'
-                : 'bg-gradient-to-r from-purple-600 to-pink-500'
+              isFollowing ? "bg-gray-600" : "bg-gradient-vibe"
             }`}
           >
             <Plus
               className={`w-4 h-4 ${
-                isFollowing ? 'text-white rotate-45' : 'text-white'
+                isFollowing ? "text-white rotate-45" : "text-white"
               }`}
             />
           </motion.button>
@@ -303,7 +310,7 @@ export default function VibeItem({
           >
             <Heart
               className={`w-6 h-6 ${
-                liked ? 'fill-red-500 text-red-500' : 'text-white'
+                liked ? "fill-red-500 text-red-500" : "text-white"
               }`}
             />
           </motion.button>
@@ -341,11 +348,11 @@ export default function VibeItem({
           transition={{
             duration: 3,
             repeat: isPlaying ? Infinity : 0,
-            ease: 'linear',
+            ease: "linear",
           }}
           className="w-14 h-14 rounded-full bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center border-2 border-white/20 mt-2"
         >
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center">
             <Music className="w-5 h-5 text-white" />
           </div>
         </motion.div>
@@ -355,9 +362,7 @@ export default function VibeItem({
       <div className="absolute bottom-0 left-0 right-0 px-4 pb-20 z-10">
         {/* Nom d'utilisateur */}
         <div className="mb-3">
-          <h3 className="text-white text-base font-bold">
-            @{username}
-          </h3>
+          <h3 className="text-white text-base font-bold">@{username}</h3>
         </div>
 
         {/* Description avec limite de lignes */}
@@ -365,7 +370,7 @@ export default function VibeItem({
           <p
             ref={descriptionRef}
             className={`text-white text-sm leading-relaxed ${
-              showFullDescription ? '' : 'line-clamp-2'
+              showFullDescription ? "" : "line-clamp-2"
             }`}
           >
             {description}
@@ -391,7 +396,7 @@ export default function VibeItem({
               transition={{
                 duration: 10,
                 repeat: Infinity,
-                ease: 'linear',
+                ease: "linear",
               }}
               className="flex items-center gap-2"
             >
@@ -416,4 +421,3 @@ export default function VibeItem({
     </section>
   );
 }
-

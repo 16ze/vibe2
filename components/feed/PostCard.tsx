@@ -1,9 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
-import { MediaPost } from '@/types/post';
-import MediaRenderer from '@/components/common/MediaRenderer';
+import MediaRenderer from "@/components/common/MediaRenderer";
+import { MediaPost } from "@/types/post";
+import { formatDistanceToNow } from "date-fns";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  Bookmark,
+  Heart,
+  MessageCircle,
+  MoreHorizontal,
+  Send,
+} from "lucide-react";
+import { useEffect, useState } from "react";
 
 /**
  * Props du composant PostCard
@@ -18,12 +24,19 @@ interface PostCardProps {
   isLiked?: boolean;
 }
 
-export default function PostCard({ post, onLike, onComment, onShare, onSave, isLiked = false }: PostCardProps) {
+export default function PostCard({
+  post,
+  onLike,
+  onComment,
+  onShare,
+  onSave,
+  isLiked = false,
+}: PostCardProps) {
   const [liked, setLiked] = useState(isLiked);
   const [saved, setSaved] = useState(false);
   const [showHeart, setShowHeart] = useState(false);
   const [likesCount, setLikesCount] = useState(post.likes_count || 0);
-  const [timeAgo, setTimeAgo] = useState<string>('');
+  const [timeAgo, setTimeAgo] = useState<string>("");
 
   /**
    * Calcule le temps relatif côté client uniquement
@@ -31,9 +44,11 @@ export default function PostCard({ post, onLike, onComment, onShare, onSave, isL
    */
   useEffect(() => {
     if (post.created_date) {
-      setTimeAgo(formatDistanceToNow(new Date(post.created_date), { addSuffix: true }));
+      setTimeAgo(
+        formatDistanceToNow(new Date(post.created_date), { addSuffix: true })
+      );
     } else {
-      setTimeAgo('Maintenant');
+      setTimeAgo("Maintenant");
     }
   }, [post.created_date]);
 
@@ -64,15 +79,21 @@ export default function PostCard({ post, onLike, onComment, onShare, onSave, isL
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-full overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200">
             {post.author_avatar ? (
-              <img src={post.author_avatar} alt="" className="w-full h-full object-cover" />
+              <img
+                src={post.author_avatar}
+                alt=""
+                className="w-full h-full object-cover"
+              />
             ) : (
               <div className="w-full h-full flex items-center justify-center text-gray-500 font-semibold text-sm">
-                {post.author_name?.charAt(0)?.toUpperCase() || 'V'}
+                {post.author_name?.charAt(0)?.toUpperCase() || "V"}
               </div>
             )}
           </div>
           <div>
-            <p className="font-semibold text-sm text-gray-900">{post.author_name || 'Utilisateur'}</p>
+            <p className="font-semibold text-sm text-gray-900">
+              {post.author_name || "Utilisateur"}
+            </p>
           </div>
         </div>
         <button className="p-1">
@@ -81,21 +102,21 @@ export default function PostCard({ post, onLike, onComment, onShare, onSave, isL
       </div>
 
       {/* Media - Utilise MediaRenderer pour gérer IndexedDB et URLs classiques */}
-      <div 
+      <div
         className="relative aspect-square bg-gray-100"
         onDoubleClick={handleDoubleTap}
       >
         <MediaRenderer
           src={post.media_url}
-          type={post.media_type === 'video' ? 'video' : 'image'}
+          type={post.media_type === "video" ? "video" : "image"}
           className="w-full h-full object-cover"
-          controls={post.media_type === 'video' ? false : undefined}
-          playsInline={post.media_type === 'video' ? true : undefined}
-          muted={post.media_type === 'video' ? true : undefined}
-          loop={post.media_type === 'video' ? true : undefined}
-          loading={post.media_type === 'photo' ? 'lazy' : undefined}
+          controls={post.media_type === "video" ? false : undefined}
+          playsInline={post.media_type === "video" ? true : undefined}
+          muted={post.media_type === "video" ? true : undefined}
+          loop={post.media_type === "video" ? true : undefined}
+          loading={post.media_type === "photo" ? "lazy" : undefined}
         />
-        
+
         <AnimatePresence>
           {showHeart && (
             <motion.div
@@ -114,58 +135,59 @@ export default function PostCard({ post, onLike, onComment, onShare, onSave, isL
       <div className="px-4 py-3">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-4">
-            <motion.button 
-              whileTap={{ scale: 0.9 }}
-              onClick={handleLike}
-            >
-              <Heart className={`w-6 h-6 transition-colors ${
-                liked ? 'text-red-500 fill-red-500' : 'text-gray-900'
-              }`} />
+            <motion.button whileTap={{ scale: 0.9 }} onClick={handleLike}>
+              <Heart
+                className={`w-6 h-6 transition-colors ${
+                  liked ? "text-red-500 fill-red-500" : "text-gray-900"
+                }`}
+              />
             </motion.button>
-            <motion.button 
+            <motion.button
               whileTap={{ scale: 0.9 }}
               onClick={() => onComment?.(post)}
             >
               <MessageCircle className="w-6 h-6 text-gray-900" />
             </motion.button>
-            <motion.button 
+            <motion.button
               whileTap={{ scale: 0.9 }}
               onClick={() => onShare?.(post)}
             >
               <Send className="w-6 h-6 text-gray-900" />
             </motion.button>
           </div>
-          <motion.button 
+          <motion.button
             whileTap={{ scale: 0.9 }}
             onClick={() => {
               setSaved(!saved);
               onSave?.(post.id);
             }}
           >
-            <Bookmark className={`w-6 h-6 transition-colors ${
-              saved ? 'text-gray-900 fill-gray-900' : 'text-gray-900'
-            }`} />
+            <Bookmark
+              className={`w-6 h-6 transition-colors ${
+                saved ? "text-gray-900 fill-gray-900" : "text-gray-900"
+              }`}
+            />
           </motion.button>
         </div>
 
         {/* Likes count */}
         {likesCount > 0 && (
           <p className="font-semibold text-sm text-gray-900 mb-1">
-            {likesCount.toLocaleString()} J'aime{likesCount > 1 ? 's' : ''}
+            {likesCount.toLocaleString()} J'aime{likesCount > 1 ? "s" : ""}
           </p>
         )}
 
         {/* Caption */}
         {post.caption && (
           <p className="text-sm text-gray-900">
-            <span className="font-semibold">{post.author_name}</span>{' '}
+            <span className="font-semibold">{post.author_name}</span>{" "}
             {post.caption}
           </p>
         )}
 
         {/* Comments preview */}
         {(post.comments_count || 0) > 0 && (
-          <button 
+          <button
             className="text-sm text-gray-500 mt-1"
             onClick={() => onComment?.(post)}
           >
@@ -175,7 +197,7 @@ export default function PostCard({ post, onLike, onComment, onShare, onSave, isL
 
         {/* Timestamp */}
         <p className="text-[11px] text-gray-400 mt-2 uppercase tracking-wide">
-          {timeAgo || 'Maintenant'}
+          {timeAgo || "Maintenant"}
         </p>
       </div>
     </article>

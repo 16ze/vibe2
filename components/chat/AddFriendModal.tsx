@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { X, Search, UserPlus, Check, X as XIcon } from "lucide-react";
 import { vibe } from "@/api/vibeClient";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useUI } from "@/contexts/UIContext";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { AnimatePresence, motion } from "framer-motion";
+import { Check, Search, UserPlus, X, X as XIcon } from "lucide-react";
+import { useEffect, useState } from "react";
 
 interface AddFriendModalProps {
   isOpen: boolean;
@@ -12,7 +13,11 @@ interface AddFriendModalProps {
   currentUser: any;
 }
 
-type RelationshipStatus = "NONE" | "REQUEST_SENT" | "REQUEST_RECEIVED" | "FRIENDS";
+type RelationshipStatus =
+  | "NONE"
+  | "REQUEST_SENT"
+  | "REQUEST_RECEIVED"
+  | "FRIENDS";
 
 /**
  * Modale pour ajouter des amis avec 2 onglets : Explorer et Demandes Reçues
@@ -22,9 +27,35 @@ export default function AddFriendModal({
   onClose,
   currentUser,
 }: AddFriendModalProps) {
+  /**
+   * Récupère les fonctions pour masquer/afficher la BottomNav
+   */
+  const { hideBottomNav, showBottomNav } = useUI();
   const [activeTab, setActiveTab] = useState<"explore" | "requests">("explore");
   const [searchQuery, setSearchQuery] = useState("");
   const queryClient = useQueryClient();
+
+  /**
+   * Masque la BottomNav quand la modale est ouverte
+   * La réaffiche quand la modale est fermée
+   * Pattern robuste avec délai de sécurité pour les animations
+   */
+  useEffect(() => {
+    if (isOpen) {
+      hideBottomNav();
+    } else {
+      // Délai de sécurité pour laisser l'animation de fermeture se finir si besoin
+      const timer = setTimeout(() => {
+        showBottomNav();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+
+    // Sécurité ultime au démontage
+    return () => {
+      showBottomNav();
+    };
+  }, [isOpen, hideBottomNav, showBottomNav]);
 
   /**
    * Récupère tous les utilisateurs disponibles
@@ -45,7 +76,7 @@ export default function AddFriendModal({
   /**
    * Récupère toutes les relations (Follow) de l'utilisateur actuel
    */
-  const { data: relationships = [] } = useQuery({
+  const { data: relationships = [], refetch: refetchRelationships } = useQuery({
     queryKey: ["relationships", currentUser?.email],
     queryFn: async () => {
       if (!currentUser?.email) return [];
@@ -56,13 +87,16 @@ export default function AddFriendModal({
         const received = await vibe.entities.Follow.filter({
           following_email: currentUser.email,
         });
-        return [...sent, ...received];
+        const allRelations = [...sent, ...received];
+        console.log("Relations récupérées:", allRelations);
+        return allRelations;
       } catch (error) {
         console.error("Error fetching relationships:", error);
         return [];
       }
     },
     enabled: isOpen && !!currentUser,
+    refetchOnWindowFocus: true, // Rafraîchit quand la fenêtre reprend le focus
   });
 
   /**
@@ -83,7 +117,12 @@ export default function AddFriendModal({
     );
 
     // Si les deux relations existent avec status FRIENDS ou active, ils sont amis
-    if (sent && received && (sent.status === "FRIENDS" || sent.status === "active") && (received.status === "FRIENDS" || received.status === "active")) {
+    if (
+      sent &&
+      received &&
+      (sent.status === "FRIENDS" || sent.status === "active") &&
+      (received.status === "FRIENDS" || received.status === "active")
+    ) {
       return "FRIENDS";
     } else if (sent) {
       // Vérifie le statut de la relation envoyée
@@ -96,7 +135,11 @@ export default function AddFriendModal({
       // Vérifie le statut de la relation reçue
       if (received.status === "FRIENDS" || received.status === "active") {
         return "FRIENDS";
-      } else if (received.status === "REQUEST_SENT" || received.status === "pending") {
+      } else if (
+        received.status === "REQUEST_SENT" ||
+        received.status === "pending" ||
+        received.status === "REQUEST_RECEIVED"
+      ) {
         return "REQUEST_RECEIVED";
       }
     }
@@ -132,7 +175,9 @@ export default function AddFriendModal({
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["relationships", currentUser?.email] });
+      queryClient.invalidateQueries({
+        queryKey: ["relationships", currentUser?.email],
+      });
     },
   });
 
@@ -175,7 +220,9 @@ export default function AddFriendModal({
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["relationships", currentUser?.email] });
+      queryClient.invalidateQueries({
+        queryKey: ["relationships", currentUser?.email],
+      });
     },
   });
 
@@ -195,7 +242,9 @@ export default function AddFriendModal({
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["relationships", currentUser?.email] });
+      queryClient.invalidateQueries({
+        queryKey: ["relationships", currentUser?.email],
+      });
     },
   });
 
@@ -203,21 +252,49 @@ export default function AddFriendModal({
    * Filtre les utilisateurs selon l'onglet actif
    */
   const getFilteredUsers = () => {
-    const otherUsers = allUsers.filter(
-      (user: any) => user.email !== currentUser?.email
-    );
-
     if (activeTab === "explore") {
       // Affiche les utilisateurs qui ne sont pas encore amis
+      const otherUsers = allUsers.filter(
+        (user: any) => user.email !== currentUser?.email
+      );
       return otherUsers.filter((user: any) => {
         const status = getRelationshipStatus(user.email);
         return status === "NONE" || status === "REQUEST_SENT";
       });
     } else {
-      // Affiche les utilisateurs avec REQUEST_RECEIVED
-      return otherUsers.filter((user: any) => {
-        return getRelationshipStatus(user.email) === "REQUEST_RECEIVED";
+      // Pour les demandes reçues, on récupère les emails depuis les relations
+      // et on crée des objets utilisateur temporaires si nécessaire
+      const receivedRequests = relationships.filter(
+        (rel: any) =>
+          rel.following_email === currentUser?.email &&
+          (rel.status === "REQUEST_RECEIVED" || rel.status === "pending")
+      );
+
+      console.log("Demandes reçues trouvées:", receivedRequests);
+
+      // Crée une liste d'utilisateurs à partir des demandes reçues
+      const requestUsers = receivedRequests.map((rel: any) => {
+        // Cherche l'utilisateur dans allUsers
+        const user = allUsers.find((u: any) => u.email === rel.follower_email);
+
+        // Si l'utilisateur n'existe pas, crée un objet temporaire
+        if (!user) {
+          const emailParts = rel.follower_email.split("@")[0];
+          return {
+            email: rel.follower_email,
+            full_name:
+              emailParts.charAt(0).toUpperCase() + emailParts.slice(1) ||
+              "Utilisateur Test",
+            username: emailParts || "user",
+            avatar_url: null,
+          };
+        }
+
+        return user;
       });
+
+      console.log("Utilisateurs de demandes:", requestUsers);
+      return requestUsers;
     }
   };
 
@@ -252,7 +329,9 @@ export default function AddFriendModal({
         >
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-4 border-b border-gray-100 flex-shrink-0">
-            <h2 className="text-lg font-bold text-gray-900">Ajouter des amis</h2>
+            <h2 className="text-lg font-bold text-gray-900">
+              Ajouter des amis
+            </h2>
             <motion.button
               whileTap={{ scale: 0.9 }}
               onClick={onClose}
@@ -361,7 +440,9 @@ export default function AddFriendModal({
                           {user.full_name || user.username || user.email}
                         </h3>
                         {user.username && user.full_name && (
-                          <p className="text-sm text-gray-500">@{user.username}</p>
+                          <p className="text-sm text-gray-500">
+                            @{user.username}
+                          </p>
                         )}
                       </div>
 
@@ -395,7 +476,9 @@ export default function AddFriendModal({
                         <div className="flex items-center gap-2">
                           <motion.button
                             whileTap={{ scale: 0.95 }}
-                            onClick={() => acceptRequestMutation.mutate(user.email)}
+                            onClick={() =>
+                              acceptRequestMutation.mutate(user.email)
+                            }
                             className="px-4 py-2 bg-blue-500 text-white rounded-full text-sm font-medium hover:bg-blue-600 transition-colors flex items-center gap-2"
                           >
                             <Check className="w-4 h-4" />
@@ -403,7 +486,9 @@ export default function AddFriendModal({
                           </motion.button>
                           <motion.button
                             whileTap={{ scale: 0.95 }}
-                            onClick={() => rejectRequestMutation.mutate(user.email)}
+                            onClick={() =>
+                              rejectRequestMutation.mutate(user.email)
+                            }
                             className="px-4 py-2 bg-gray-200 text-gray-700 rounded-full text-sm font-medium hover:bg-gray-300 transition-colors flex items-center gap-2"
                           >
                             <XIcon className="w-4 h-4" />
@@ -422,4 +507,3 @@ export default function AddFriendModal({
     </AnimatePresence>
   );
 }
-

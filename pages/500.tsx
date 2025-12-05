@@ -37,7 +37,7 @@ export default function ServerError() {
           <Link href="/">
             <motion.button
               whileTap={{ scale: 0.95 }}
-              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-500 text-white rounded-xl font-semibold hover:shadow-lg transition-shadow"
+              className="flex items-center gap-2 px-6 py-3 bg-gradient-vibe text-white rounded-xl font-semibold hover:shadow-lg transition-shadow glow-vibe"
             >
               <Home className="w-5 h-5" />
               Accueil
