@@ -65,9 +65,12 @@ export default function App({ Component, pageProps }: AppProps) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            refetchOnWindowFocus: false,
+            refetchOnWindowFocus: true, // Rafraîchit automatiquement au retour sur la page
+            refetchOnMount: true, // Rafraîchit au montage du composant
+            refetchOnReconnect: true, // Rafraîchit lors de la reconnexion
             retry: 1,
-            staleTime: 5 * 60 * 1000, // 5 minutes
+            staleTime: 30 * 1000, // 30 secondes (au lieu de 5 minutes) pour des mises à jour plus fréquentes
+            gcTime: 5 * 60 * 1000, // Garde en cache 5 minutes (anciennement cacheTime)
           },
         },
       })

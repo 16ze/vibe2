@@ -206,8 +206,8 @@ export function NotificationProvider({
     window.addEventListener("new-activity" as any, handleNewActivity);
     window.addEventListener("focus", handleFocus);
 
-    // Intervalle de rafraîchissement toutes les 30 secondes
-    const interval = setInterval(refreshUnreadCounts, 30000);
+    // Intervalle de rafraîchissement toutes les 10 secondes pour des mises à jour plus fréquentes
+    const interval = setInterval(refreshUnreadCounts, 10000);
 
     return () => {
       window.removeEventListener("new-message" as any, handleNewMessage);

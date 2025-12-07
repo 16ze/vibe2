@@ -104,7 +104,7 @@ export default function Conversations() {
   // Supprimé : création automatique de conversation de bienvenue
   // Les conversations sont maintenant créées à la demande via getOrCreateConversation
 
-  // Récupère les conversations depuis Supabase
+  // Récupère les conversations depuis Supabase avec rafraîchissement automatique
   const { data: conversations = [], isLoading } = useQuery({
     queryKey: ["conversations", currentUser?.id],
     queryFn: async () => {
@@ -112,7 +112,8 @@ export default function Conversations() {
       return await getConversations(currentUser.id);
     },
     enabled: !!currentUser?.id,
-    refetchOnWindowFocus: true, // Rafraîchit quand on revient sur la page
+    refetchInterval: 5000, // Rafraîchit toutes les 5 secondes pour voir les nouveaux messages
+    refetchOnWindowFocus: true,
   });
 
   /**

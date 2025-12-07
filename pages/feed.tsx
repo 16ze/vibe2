@@ -44,25 +44,32 @@ export default function Feed() {
 
   /**
    * Récupère les utilisateurs suivis pour filtrer le feed "Abonnements"
+   * Avec rafraîchissement automatique toutes les 30 secondes
    */
-  useEffect(() => {
-    const loadFollowing = async () => {
-      if (!currentUser?.id || !isMounted) return;
+  const { data: followingData = [] } = useQuery({
+    queryKey: ["following-ids", currentUser?.id],
+    queryFn: async () => {
+      if (!currentUser?.id) return [];
       try {
         const following = await getFollowing(currentUser.id);
-        // Extrait les IDs des utilisateurs suivis
-        const ids = following
-          .map((f) => f.following_id)
-          .filter((id): id is string => !!id);
-        setFollowingIds(ids);
+        return following;
       } catch (error) {
         console.error("[Feed] Error loading following:", error);
-        // En cas d'erreur, on laisse followingIds vide (pas de filtre)
-        setFollowingIds([]);
+        return [];
       }
-    };
-    loadFollowing();
-  }, [currentUser?.id, isMounted]);
+    },
+    enabled: !!currentUser?.id && isMounted,
+    refetchInterval: 30000, // Rafraîchit toutes les 30 secondes
+    refetchOnWindowFocus: true,
+  });
+
+  // Extrait les IDs des utilisateurs suivis
+  useEffect(() => {
+    const ids = followingData
+      .map((f) => f.following_id)
+      .filter((id): id is string => !!id);
+    setFollowingIds(ids);
+  }, [followingData]);
 
   /**
    * Marque le composant comme monté côté client
@@ -72,18 +79,22 @@ export default function Feed() {
     setIsMounted(true);
   }, []);
 
-  // Récupère les posts depuis Supabase
+  // Récupère les posts depuis Supabase avec rafraîchissement automatique
   const { data: allPosts = [], isLoading: postsLoading } = useQuery({
     queryKey: ["feed-posts"],
     queryFn: () => getFeed(50),
-    enabled: !!currentUser && isMounted, // Attendre que le composant soit monté
+    enabled: !!currentUser && isMounted,
+    refetchInterval: 10000, // Rafraîchit toutes les 10 secondes
+    refetchOnWindowFocus: true,
   });
 
-  // Récupère les stories depuis Supabase
+  // Récupère les stories depuis Supabase avec rafraîchissement automatique
   const { data: stories = [] } = useQuery({
     queryKey: ["feed-stories"],
     queryFn: () => getActiveStories(50),
-    enabled: !!currentUser && isMounted, // Attendre que le composant soit monté
+    enabled: !!currentUser && isMounted,
+    refetchInterval: 15000, // Rafraîchit toutes les 15 secondes (stories changent moins souvent)
+    refetchOnWindowFocus: true,
   });
 
   /**
@@ -115,7 +126,7 @@ export default function Feed() {
     }
   }, [searchParams, stories, router, isMounted]);
 
-  // Récupère les likes de l'utilisateur actuel
+  // Récupère les likes de l'utilisateur actuel avec rafraîchissement automatique
   const { data: userLikes = [] } = useQuery({
     queryKey: ["user-likes", currentUser?.id],
     queryFn: async () => {
@@ -131,10 +142,80 @@ export default function Feed() {
       }
       return data || [];
     },
-    enabled: !!currentUser?.id && isMounted, // Attendre que le composant soit monté
+    enabled: !!currentUser?.id && isMounted,
+    refetchInterval: 20000, // Rafraîchit toutes les 20 secondes
+    refetchOnWindowFocus: true,
   });
 
   const likedPostIds = new Set(userLikes.map((l: any) => l.post_id));
+
+  /**
+   * Abonnement Realtime pour les nouveaux posts
+   * Rafraîchit automatiquement le feed quand un nouveau post est créé
+   */
+  useEffect(() => {
+    if (!currentUser?.id || !isMounted) return;
+
+    const channel = supabase
+      .channel("feed-posts-realtime")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "posts",
+        },
+        () => {
+          console.log("[Feed] Nouveau post détecté, rafraîchissement...");
+          queryClient.invalidateQueries({ queryKey: ["feed-posts"] });
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "posts",
+        },
+        () => {
+          console.log("[Feed] Post mis à jour, rafraîchissement...");
+          queryClient.invalidateQueries({ queryKey: ["feed-posts"] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUser?.id, isMounted, queryClient]);
+
+  /**
+   * Abonnement Realtime pour les nouvelles stories
+   * Rafraîchit automatiquement les stories quand une nouvelle est créée
+   */
+  useEffect(() => {
+    if (!currentUser?.id || !isMounted) return;
+
+    const channel = supabase
+      .channel("feed-stories-realtime")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "stories",
+        },
+        () => {
+          console.log("[Feed] Nouvelle story détectée, rafraîchissement...");
+          queryClient.invalidateQueries({ queryKey: ["feed-stories"] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUser?.id, isMounted, queryClient]);
 
   const likeMutation = useMutation({
     mutationFn: async (postId: string) => {

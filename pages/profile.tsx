@@ -50,16 +50,18 @@ export default function Profile() {
   }, [currentUser]);
 
   /**
-   * Récupère les statistiques du profil
+   * Récupère les statistiques du profil avec rafraîchissement automatique
    */
   const { data: stats, refetch: refetchStats } = useQuery({
     queryKey: ["profile-stats", currentUser?.id],
     queryFn: () => (currentUser ? getStats(currentUser.id) : null),
     enabled: !!currentUser,
+    refetchInterval: 30000, // Rafraîchit toutes les 30 secondes
+    refetchOnWindowFocus: true,
   });
 
   /**
-   * Récupère les posts de l'utilisateur
+   * Récupère les posts de l'utilisateur avec rafraîchissement automatique
    */
   const { data: posts = [] } = useQuery({
     queryKey: ["user-posts", currentUser?.id],
@@ -80,24 +82,30 @@ export default function Profile() {
       return data || [];
     },
     enabled: !!currentUser,
+    refetchInterval: 15000, // Rafraîchit toutes les 15 secondes
+    refetchOnWindowFocus: true,
   });
 
   /**
-   * Récupère les followers
+   * Récupère les followers avec rafraîchissement automatique
    */
   const { data: followers = [] } = useQuery({
     queryKey: ["followers", currentUser?.id],
     queryFn: () => (currentUser ? getFollowers(currentUser.id) : []),
     enabled: !!currentUser,
+    refetchInterval: 20000, // Rafraîchit toutes les 20 secondes
+    refetchOnWindowFocus: true,
   });
 
   /**
-   * Récupère les following
+   * Récupère les following avec rafraîchissement automatique
    */
   const { data: following = [] } = useQuery({
     queryKey: ["following", currentUser?.id],
     queryFn: () => (currentUser ? getFollowing(currentUser.id) : []),
     enabled: !!currentUser,
+    refetchInterval: 20000, // Rafraîchit toutes les 20 secondes
+    refetchOnWindowFocus: true,
   });
 
   /**
