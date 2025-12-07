@@ -2,7 +2,7 @@
 
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/router";
-import React, { useEffect } from "react";
+import React from "react";
 
 /**
  * Liste des routes publiques (accessibles sans authentification)
@@ -21,135 +21,47 @@ interface AuthGuardProps {
 }
 
 /**
- * Composant de protection des routes
- * PATTERN CLIENT-ONLY STRICT : Ne rend rien tant que le client n'est pas prêt
- * Évite les écrans noirs/blancs et les problèmes d'hydratation SSR
+ * Composant de protection des routes - VERSION SIMPLIFIÉE
+ * Supprime tous les écrans noirs et logiques complexes
  */
 export default function AuthGuard({ children }: AuthGuardProps) {
   const { user, isLoading } = useAuth();
   const router = useRouter();
-  const [isRedirecting, setIsRedirecting] = React.useState(false);
-  const [isMounted, setIsMounted] = React.useState(false);
 
-  // IMPORTANT : Tous les hooks doivent être appelés AVANT tous les returns conditionnels
-  // Pattern Client-Only strict : Ne rien rendre tant que le client n'est pas prêt
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
+  // Si pas chargé, petit spinner simple, PAS d'écran noir bloquant
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center p-10">
+        <div className="text-center">
+          <div className="w-6 h-6 border-2 border-gray-300 border-t-indigo-600 rounded-full animate-spin mx-auto mb-2" />
+          <p className="text-gray-500 text-sm">Chargement...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Vérifie si la route actuelle est publique
   const isPublicPath = router.isReady
     ? PUBLIC_PATHS.includes(router.pathname)
     : false;
 
-  /**
-   * Timeout de sécurité pour éviter que l'écran noir reste indéfiniment
-   */
-  useEffect(() => {
-    if (isRedirecting) {
-      const timeout = setTimeout(() => {
-        console.warn("[AuthGuard] Redirection timeout, showing content anyway");
-        setIsRedirecting(false);
-      }, 2000);
-      return () => clearTimeout(timeout);
-    }
-  }, [isRedirecting]);
-
-  /**
-   * Redirection intelligente :
-   * 1. Si utilisateur connecté ET route publique → redirige vers /feed
-   * 2. Si utilisateur non connecté ET route non publique → redirige vers /
-   * 
-   * IMPORTANT : Ne redirige que si !isLoading ET isMounted
-   */
-  useEffect(() => {
-    // Ne fait rien si le router n'est pas prêt, pendant le chargement, ou si pas monté
-    if (!router.isReady || isLoading || !isMounted) {
-      setIsRedirecting(false);
-      return;
-    }
-
-    // Vérifie si on est déjà sur la bonne page
-    const isOnCorrectPage = (user && !isPublicPath) || (!user && isPublicPath);
-
-    if (isOnCorrectPage) {
-      setIsRedirecting(false);
-      return;
-    }
+  // Redirection simple si nécessaire (sans écran de chargement)
+  React.useEffect(() => {
+    if (!router.isReady || isLoading) return;
 
     // Si pas connecté et page privée -> Redirige vers Login
     if (!user && !isPublicPath) {
-      setIsRedirecting(true);
-      router
-        .push("/")
-        .then(() => {
-          setIsRedirecting(false);
-        })
-        .catch((err) => {
-          console.error("[AuthGuard] Error redirecting to /:", err);
-          setIsRedirecting(false);
-        });
+      router.push("/");
       return;
     }
 
     // Si connecté et page publique -> Redirige vers Feed
     if (user && isPublicPath) {
-      setIsRedirecting(true);
-      router
-        .push("/feed")
-        .then(() => {
-          setIsRedirecting(false);
-        })
-        .catch((err) => {
-          console.error("[AuthGuard] Error redirecting to /feed:", err);
-          setIsRedirecting(false);
-        });
+      router.push("/feed");
       return;
     }
-  }, [user, isLoading, router, isPublicPath, isMounted]);
+  }, [user, isLoading, router, isPublicPath]);
 
-  // MAINTENANT on peut faire les returns conditionnels APRÈS tous les hooks
-  // Ne rien rendre tant que le client n'est pas monté
-  if (!isMounted) {
-    return null;
-  }
-
-  // 1. Pendant le chargement initial -> Écran de chargement blanc (pas noir)
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-8 h-8 border-4 border-gray-200 border-t-indigo-600 rounded-full animate-spin mx-auto mb-2" />
-          <p className="text-gray-500 text-sm">Chargement...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // 2. Si le router n'est pas prêt -> Écran de chargement blanc
-  if (!router.isReady) {
-    return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-8 h-8 border-4 border-gray-200 border-t-indigo-600 rounded-full animate-spin mx-auto mb-2" />
-          <p className="text-gray-500 text-sm">Chargement...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // 3. Si on est en train de rediriger -> Écran de chargement blanc (avec timeout de sécurité)
-  if (isRedirecting) {
-    return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-8 h-8 border-4 border-gray-200 border-t-indigo-600 rounded-full animate-spin mx-auto mb-2" />
-          <p className="text-gray-500 text-sm">Redirection...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // 4. Tout est bon, on affiche la page (avec isPublicRoute pour compatibilité)
+  // Redirection simple si nécessaire
   return <>{children({ isPublicRoute: isPublicPath })}</>;
 }

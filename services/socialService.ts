@@ -453,80 +453,69 @@ export async function searchUsers(
       currentUserId
     );
 
-    // CORRECTION : Utilise une seule requête avec OR pour rechercher dans username ET full_name
-    // Plus efficace et évite les problèmes de syntaxe
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("id, username, full_name, avatar_url")
-      .neq("id", currentUserId)
-      .or(`username.ilike.%${searchTerm}%,full_name.ilike.%${searchTerm}%`)
-      .limit(limit);
+    // CORRECTION : Utilise deux requêtes séparées avec ilike pour username et full_name
+    // Syntaxe correcte pour Supabase
+    const searchTermPattern = `%${searchTerm}%`;
+    
+    const [usernameResults, fullNameResults] = await Promise.all([
+      supabase
+        .from("profiles")
+        .select("id, username, full_name, avatar_url")
+        .neq("id", currentUserId)
+        .ilike("username", searchTermPattern)
+        .limit(limit),
+      supabase
+        .from("profiles")
+        .select("id, username, full_name, avatar_url")
+        .neq("id", currentUserId)
+        .ilike("full_name", searchTermPattern)
+        .limit(limit),
+    ]);
+    
+    // Combine les résultats et supprime les doublons
+    const allResults = [
+      ...(usernameResults.data || []),
+      ...(fullNameResults.data || []),
+    ];
+    
+    const uniqueResults = Array.from(
+      new Map(allResults.map((user) => [user.id, user])).values()
+    );
+    
+    const limitedResults = uniqueResults.slice(0, limit);
+    
+    // Vérifie les erreurs
+    if (usernameResults.error) {
+      console.error("[socialService] Error searching by username:", usernameResults.error);
+    }
+    if (fullNameResults.error) {
+      console.error("[socialService] Error searching by full_name:", fullNameResults.error);
+    }
+    
+    if (usernameResults.error && fullNameResults.error) {
+      console.error("[socialService] Both search queries failed:", {
+        username: usernameResults.error,
+        fullName: fullNameResults.error,
+      });
+      return [];
+    }
 
     // ========== LOGS DE DEBUG SUPABASE ==========
     console.log("🔍 [DEBUG] Search query result:", {
-      data: data,
-      error: error,
-      count: data?.length || 0,
+      data: limitedResults,
+      error: usernameResults.error || fullNameResults.error,
+      count: limitedResults.length,
       query: searchTerm,
     });
     // ============================================
 
-    if (error) {
-      console.error("[socialService] Error searching users:", error);
-      
-      // Si erreur de syntaxe, essaie avec deux requêtes séparées (fallback)
-      if (error.code === "PGRST100" || error.code === "42703") {
-        console.log("[socialService] Trying fallback search method...");
-        
-        const searchTermPattern = `%${searchTerm}%`;
-        
-        const [usernameResults, fullNameResults] = await Promise.all([
-          supabase
-            .from("profiles")
-            .select("id, username, full_name, avatar_url")
-            .neq("id", currentUserId)
-            .ilike("username", searchTermPattern)
-            .limit(limit),
-          supabase
-            .from("profiles")
-            .select("id, username, full_name, avatar_url")
-            .neq("id", currentUserId)
-            .ilike("full_name", searchTermPattern)
-            .limit(limit),
-        ]);
-
-        if (usernameResults.error && fullNameResults.error) {
-          console.error("[socialService] Both fallback queries failed:", {
-            username: usernameResults.error,
-            fullName: fullNameResults.error,
-          });
-          return [];
-        }
-
-        const allResults = [
-          ...(usernameResults.data || []),
-          ...(fullNameResults.data || []),
-        ];
-
-        const uniqueResults = Array.from(
-          new Map(allResults.map((user) => [user.id, user])).values()
-        );
-
-        const limitedResults = uniqueResults.slice(0, limit);
-        console.log("[socialService] Fallback search found:", limitedResults.length);
-        return limitedResults;
-      }
-      
-      return [];
-    }
-
-    if (!data || data.length === 0) {
+    if (!limitedResults || limitedResults.length === 0) {
       console.log("[socialService] No users found for query:", searchTerm);
       return [];
     }
 
-    console.log("[socialService] Found users:", data.length);
-    return data;
+    console.log("[socialService] Found users:", limitedResults.length);
+    return limitedResults;
   } catch (error) {
     console.error("[socialService] Error in searchUsers:", error);
     return [];

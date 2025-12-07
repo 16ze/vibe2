@@ -1127,7 +1127,7 @@ export default function Camera() {
         playsInline
         muted
         className="absolute inset-0 h-[100dvh] w-full object-cover z-0"
-        style={selectedFilter.style}
+        style={{ ...selectedFilter.style, zIndex: 0 }}
         onLoadedMetadata={() => {
           console.log("[Camera] Video metadata loaded in JSX");
           if (videoRef.current && videoRef.current.paused) {
@@ -1142,9 +1142,10 @@ export default function Camera() {
         }}
       />
 
-      {/* Conteneur pour tous les contrôles et overlays - z-10 pour être au-dessus de la vidéo */}
+      {/* Conteneur pour tous les contrôles et overlays - z-20 pour être au-dessus de la vidéo */}
       {/* IMPORTANT MOBILE : h-[100dvh] au lieu de h-full pour Dynamic Viewport Height */}
-      <div className="relative z-10 h-[100dvh] w-full pointer-events-none">
+      {/* CORRECTION : z-20 pour être au-dessus de la vidéo (z-0) */}
+      <div className="relative z-20 h-[100dvh] w-full pointer-events-none">
         {/* Aspect Ratio Overlay - Masque visuel pour montrer la zone de crop */}
         {/* Ne s'affiche que si captureMode === 'POST' */}
         <AspectRatioOverlay ratio={aspectRatio} show={captureMode === "POST"} />

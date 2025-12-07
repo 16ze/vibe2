@@ -56,8 +56,18 @@ export default function App({ Component, pageProps }: AppProps) {
     // Nettoie une seule fois au démarrage
     cleanupLocalStorage();
 
-    // Handler global pour capturer les QuotaExceededError
+    // Handler global pour capturer TOUTES les erreurs (pas seulement QuotaExceededError)
     const handleError = (event: ErrorEvent) => {
+      // Log toutes les erreurs pour diagnostic
+      console.error("[_app] Global error caught:", {
+        message: event.message,
+        filename: event.filename,
+        lineno: event.lineno,
+        colno: event.colno,
+        error: event.error,
+      });
+
+      // Nettoie localStorage si QuotaExceededError
       if (event.error?.name === "QuotaExceededError") {
         console.warn("[_app] QuotaExceededError detected, cleaning localStorage...");
         cleanupLocalStorage();
@@ -68,6 +78,13 @@ export default function App({ Component, pageProps }: AppProps) {
 
     // Handler pour les promesses rejetées
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      // Log toutes les promesses rejetées pour diagnostic
+      console.error("[_app] Unhandled rejection:", {
+        reason: event.reason,
+        promise: event.promise,
+      });
+
+      // Nettoie localStorage si QuotaExceededError
       if (event.reason?.name === "QuotaExceededError") {
         console.warn("[_app] QuotaExceededError in promise, cleaning localStorage...");
         cleanupLocalStorage();
