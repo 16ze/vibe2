@@ -38,6 +38,7 @@ interface Comment {
   user_id: string;
   content: string;
   created_at: string;
+  likes_count?: number;
   profiles?: {
     id: string;
     username: string;
@@ -215,18 +216,18 @@ export default function CommentDrawer({
       const newSet = new Set(prev);
       if (newSet.has(commentId)) {
         newSet.delete(commentId);
-        setAllComments((prevComments) =>
+        setComments((prevComments) =>
           prevComments.map((c) =>
             c.id === commentId
-              ? { ...c, likes_count: Math.max(0, c.likes_count - 1) }
+              ? { ...c, likes_count: Math.max(0, (c.likes_count || 0) - 1) }
               : c
           )
         );
       } else {
         newSet.add(commentId);
-        setAllComments((prevComments) =>
+        setComments((prevComments) =>
           prevComments.map((c) =>
-            c.id === commentId ? { ...c, likes_count: c.likes_count + 1 } : c
+            c.id === commentId ? { ...c, likes_count: (c.likes_count || 0) + 1 } : c
           )
         );
       }

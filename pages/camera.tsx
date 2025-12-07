@@ -8,7 +8,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { useRouter } from "next/router";
 import { uploadMedia } from "@/services/mediaService";
-import { createPost, createStory } from "@/services/postService";
+import { createPost, createStory, getActiveStories } from "@/services/postService";
 import { getOrCreateConversation, sendMessage } from "@/services/chatService";
 import {
   Download,
@@ -279,8 +279,7 @@ export default function Camera() {
     const checkActiveStory = async () => {
       try {
         if (currentUser?.id) {
-          const { postService } = await import("@/services/postService");
-          const stories = await postService.getActiveStories(50);
+          const stories = await getActiveStories(50);
           const userStories = stories.filter(
             (story: any) => story.user_id === currentUser.id
           );
