@@ -207,16 +207,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   /**
    * Initialisation et écoute des changements de session
+   * IMPORTANT : isLoading reste true jusqu'à ce que Supabase ait répondu (succès ou échec)
    */
   useEffect(() => {
+    // isLoading est déjà true par défaut (ligne 185)
+    // On ne le met à false que lorsque Supabase a répondu
+
     if (!isSupabaseConfigured) {
       console.warn("[AuthContext] Supabase non configuré - Auth désactivée");
-      setIsLoading(false);
+      // Même si Supabase n'est pas configuré, on attend un peu pour éviter les flashs
+      setTimeout(() => {
+        setIsLoading(false);
+      }, 100);
       return;
     }
 
     const initializeAuth = async () => {
       try {
+        // S'assure que isLoading est true pendant l'initialisation
         setIsLoading(true);
 
         const {
@@ -227,44 +235,60 @@ export function AuthProvider({ children }: AuthProviderProps) {
         if (error) {
           console.error("[AuthContext] Error getting session:", error);
           setUser(null);
+          // Supabase a répondu (avec erreur) -> on peut mettre isLoading à false
+          setIsLoading(false);
         } else if (session?.user) {
           await loadUserWithProfile(session.user);
           console.log(
             "[AuthContext] Session restored for:",
             session.user.email
           );
+          // Supabase a répondu (avec succès) -> on peut mettre isLoading à false
+          setIsLoading(false);
         } else {
           setUser(null);
+          // Supabase a répondu (pas de session) -> on peut mettre isLoading à false
+          setIsLoading(false);
         }
       } catch (error) {
         console.error("[AuthContext] Error initializing auth:", error);
         setUser(null);
-      } finally {
+        // Supabase a répondu (exception) -> on peut mettre isLoading à false
         setIsLoading(false);
       }
+      // Note: Pas de finally ici, on gère setIsLoading(false) dans chaque cas
     };
 
     initializeAuth();
 
     /**
      * Écoute les changements d'état d'authentification
+     * IMPORTANT : setIsLoading(false) seulement après que Supabase ait répondu
      */
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log("[AuthContext] Auth state changed:", event);
 
-      if (
-        event === "SIGNED_IN" ||
-        event === "TOKEN_REFRESHED" ||
-        event === "USER_UPDATED"
-      ) {
-        await loadUserWithProfile(session?.user || null);
-      } else if (event === "SIGNED_OUT") {
-        setUser(null);
-      }
+      // Met isLoading à true pendant le traitement de l'événement
+      setIsLoading(true);
 
-      setIsLoading(false);
+      try {
+        if (
+          event === "SIGNED_IN" ||
+          event === "TOKEN_REFRESHED" ||
+          event === "USER_UPDATED"
+        ) {
+          await loadUserWithProfile(session?.user || null);
+        } else if (event === "SIGNED_OUT") {
+          setUser(null);
+        }
+      } catch (error) {
+        console.error("[AuthContext] Error handling auth state change:", error);
+      } finally {
+        // Supabase a répondu -> on peut mettre isLoading à false
+        setIsLoading(false);
+      }
     });
 
     return () => {
