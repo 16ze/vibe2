@@ -263,3 +263,92 @@ export async function markMessagesAsRead(
   }
 }
 
+/**
+ * Récupère toutes les conversations d'un utilisateur
+ * Inclut les informations du participant (autre utilisateur)
+ */
+export async function getConversations(
+  userId: string
+): Promise<(Conversation & { participant?: any })[]> {
+  try {
+    // 1. Récupère toutes les conversations où l'utilisateur est participant
+    const { data: participantConvs, error: participantError } = await supabase
+      .from("conversation_participants")
+      .select("conversation_id")
+      .eq("user_id", userId);
+
+    if (participantError) {
+      console.error("[chatService] Error fetching participant conversations:", participantError);
+      throw participantError;
+    }
+
+    if (!participantConvs || participantConvs.length === 0) {
+      return [];
+    }
+
+    const conversationIds = participantConvs.map((p) => p.conversation_id);
+
+    // 2. Récupère les conversations avec leurs métadonnées
+    const { data: conversations, error: convError } = await supabase
+      .from("conversations")
+      .select("*")
+      .in("id", conversationIds)
+      .order("last_message_at", { ascending: false, nullsFirst: false })
+      .order("updated_at", { ascending: false });
+
+    if (convError) {
+      console.error("[chatService] Error fetching conversations:", convError);
+      throw convError;
+    }
+
+    if (!conversations || conversations.length === 0) {
+      return [];
+    }
+
+    // 3. Pour chaque conversation, récupère l'autre participant
+    const conversationsWithParticipants = await Promise.all(
+      conversations.map(async (conv) => {
+        // Récupère les participants de cette conversation
+        const { data: participants, error: participantsError } = await supabase
+          .from("conversation_participants")
+          .select("user_id")
+          .eq("conversation_id", conv.id);
+
+        if (participantsError || !participants) {
+          console.error("[chatService] Error fetching participants:", participantsError);
+          return { ...conv, participant: null };
+        }
+
+        // Trouve l'autre participant (pas moi)
+        const otherParticipantId = participants.find((p) => p.user_id !== userId)?.user_id;
+
+        if (!otherParticipantId) {
+          return { ...conv, participant: null };
+        }
+
+        // Récupère le profil de l'autre participant
+        const { data: participantProfile, error: profileError } = await supabase
+          .from("profiles")
+          .select("id, username, full_name, avatar_url")
+          .eq("id", otherParticipantId)
+          .single();
+
+        if (profileError || !participantProfile) {
+          console.error("[chatService] Error fetching participant profile:", profileError);
+          return { ...conv, participant: null };
+        }
+
+        return {
+          ...conv,
+          participant: participantProfile,
+        };
+      })
+    );
+
+    return conversationsWithParticipants;
+  } catch (error) {
+    console.error("[chatService] Error in getConversations:", error);
+    return [];
+  }
+}
+

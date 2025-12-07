@@ -24,7 +24,7 @@ class LocalStorageManager {
    * Récupère toutes les entités depuis le stockage
    */
   getAll(): any[] {
-    if (typeof window === 'undefined') return [];
+    if (typeof window === "undefined") return [];
     const data = localStorage.getItem(this.storageKey);
     return data ? JSON.parse(data) : [];
   }
@@ -33,19 +33,24 @@ class LocalStorageManager {
    * Sauvegarde toutes les entités dans le stockage
    */
   saveAll(items: any[]): void {
-    if (typeof window === 'undefined') return;
+    if (typeof window === "undefined") return;
     try {
       localStorage.setItem(this.storageKey, JSON.stringify(items));
     } catch (error: any) {
-      if (error.name === 'QuotaExceededError') {
-        console.error(`[LocalStorage] Quota exceeded for ${this.storageKey}. Attempting cleanup...`);
+      if (error.name === "QuotaExceededError") {
+        console.error(
+          `[LocalStorage] Quota exceeded for ${this.storageKey}. Attempting cleanup...`
+        );
         // Nettoie les anciennes données si le quota est dépassé
         this.cleanupOldItems(items);
         // Réessaye avec les données nettoyées
         try {
           localStorage.setItem(this.storageKey, JSON.stringify(items));
         } catch (retryError) {
-          console.error(`[LocalStorage] Failed to save after cleanup:`, retryError);
+          console.error(
+            `[LocalStorage] Failed to save after cleanup:`,
+            retryError
+          );
         }
       } else {
         console.error(`[LocalStorage] Error saving ${this.storageKey}:`, error);
@@ -92,7 +97,7 @@ class LocalStorageManager {
     const items = this.getAll();
     const index = items.findIndex((item) => item.id === id);
     if (index === -1) return null;
-    
+
     items[index] = {
       ...items[index],
       ...updates,
@@ -130,28 +135,28 @@ class LocalStorageManager {
    */
   sort(items: any[], orderBy?: string): any[] {
     if (!orderBy) return items;
-    
-    const isDesc = orderBy.startsWith('-');
+
+    const isDesc = orderBy.startsWith("-");
     const field = isDesc ? orderBy.substring(1) : orderBy;
-    
+
     return [...items].sort((a, b) => {
       const aVal = a[field];
       const bVal = b[field];
-      
+
       if (aVal === bVal) return 0;
-      
+
       // Gestion des dates
-      if (field.includes('date') || field.includes('_at')) {
+      if (field.includes("date") || field.includes("_at")) {
         const aDate = new Date(aVal).getTime();
         const bDate = new Date(bVal).getTime();
         return isDesc ? bDate - aDate : aDate - bDate;
       }
-      
+
       // Gestion des nombres
-      if (typeof aVal === 'number' && typeof bVal === 'number') {
+      if (typeof aVal === "number" && typeof bVal === "number") {
         return isDesc ? bVal - aVal : aVal - bVal;
       }
-      
+
       // Gestion des strings
       const aStr = String(aVal).toLowerCase();
       const bStr = String(bVal).toLowerCase();
@@ -167,38 +172,39 @@ class LocalStorageManager {
  * Gestionnaire de stockage pour les utilisateurs
  */
 class UserStorage {
-  private storageKey = 'vibe_users';
-  private currentUserKey = 'vibe_current_user';
+  private storageKey = "vibe_users";
+  private currentUserKey = "vibe_current_user";
 
   /**
    * Récupère l'utilisateur actuel
+   * PRODUCTION : Ne crée PLUS d'utilisateur par défaut
+   * Retourne null si aucun utilisateur connecté
    */
   getCurrentUser(): any | null {
-    if (typeof window === 'undefined') return null;
+    if (typeof window === "undefined") return null;
+
     const data = localStorage.getItem(this.currentUserKey);
-    if (data) return JSON.parse(data);
-    
-    // Crée un utilisateur par défaut si aucun n'existe
-    const defaultUser = {
-      email: 'demo@vibe.app',
-      full_name: 'Anonyme',
-      username: 'anonyme',
-      avatar_url: null,
-      bio: null,
-      created_date: new Date().toISOString(),
-    };
-    this.setCurrentUser(defaultUser);
-    return defaultUser;
+    if (!data) {
+      console.warn("[UserStorage] No user logged in");
+      return null;
+    }
+
+    try {
+      return JSON.parse(data);
+    } catch (error) {
+      console.error("[UserStorage] Error parsing current user:", error);
+      return null;
+    }
   }
 
   /**
    * Définit l'utilisateur actuel
    */
   setCurrentUser(user: any): void {
-    if (typeof window === 'undefined') return;
+    if (typeof window === "undefined") return;
     try {
       localStorage.setItem(this.currentUserKey, JSON.stringify(user));
-      
+
       // Sauvegarde aussi dans la liste des utilisateurs
       const users = this.getAll();
       const existingIndex = users.findIndex((u) => u.email === user.email);
@@ -209,8 +215,10 @@ class UserStorage {
       }
       localStorage.setItem(this.storageKey, JSON.stringify(users));
     } catch (error: any) {
-      if (error.name === 'QuotaExceededError') {
-        console.error('[LocalStorage] Quota exceeded when saving user. Clearing old users...');
+      if (error.name === "QuotaExceededError") {
+        console.error(
+          "[LocalStorage] Quota exceeded when saving user. Clearing old users..."
+        );
         // Nettoie les anciens utilisateurs (garde uniquement les 10 plus récents)
         const users = this.getAll();
         const cleanedUsers = users.slice(-10);
@@ -218,10 +226,13 @@ class UserStorage {
           localStorage.setItem(this.storageKey, JSON.stringify(cleanedUsers));
           localStorage.setItem(this.currentUserKey, JSON.stringify(user));
         } catch (retryError) {
-          console.error('[LocalStorage] Failed to save user after cleanup:', retryError);
+          console.error(
+            "[LocalStorage] Failed to save user after cleanup:",
+            retryError
+          );
         }
       } else {
-        console.error('[LocalStorage] Error saving user:', error);
+        console.error("[LocalStorage] Error saving user:", error);
       }
     }
   }
@@ -230,7 +241,7 @@ class UserStorage {
    * Récupère tous les utilisateurs
    */
   getAll(): any[] {
-    if (typeof window === 'undefined') return [];
+    if (typeof window === "undefined") return [];
     const data = localStorage.getItem(this.storageKey);
     return data ? JSON.parse(data) : [];
   }
@@ -241,13 +252,13 @@ class UserStorage {
   login(email: string, password: string): any {
     const users = this.getAll();
     let user = users.find((u) => u.email === email);
-    
+
     if (!user) {
       // Crée un nouvel utilisateur
       user = {
         email,
-        full_name: email.split('@')[0],
-        username: email.split('@')[0],
+        full_name: email.split("@")[0],
+        username: email.split("@")[0],
         avatar_url: null,
         bio: null,
         created_date: new Date().toISOString(),
@@ -255,9 +266,9 @@ class UserStorage {
       users.push(user);
       localStorage.setItem(this.storageKey, JSON.stringify(users));
     }
-    
+
     this.setCurrentUser(user);
-    return { user, token: 'local_token_' + Date.now() };
+    return { user, token: "local_token_" + Date.now() };
   }
 
   /**
@@ -265,32 +276,32 @@ class UserStorage {
    */
   register(email: string, password: string, fullName?: string): any {
     const users = this.getAll();
-    
+
     if (users.find((u) => u.email === email)) {
-      throw new Error('Email déjà utilisé');
+      throw new Error("Email déjà utilisé");
     }
-    
+
     const user = {
       email,
-      full_name: fullName || email.split('@')[0],
-      username: email.split('@')[0],
+      full_name: fullName || email.split("@")[0],
+      username: email.split("@")[0],
       avatar_url: null,
       bio: null,
       created_date: new Date().toISOString(),
     };
-    
+
     users.push(user);
     localStorage.setItem(this.storageKey, JSON.stringify(users));
     this.setCurrentUser(user);
-    
-    return { user, token: 'local_token_' + Date.now() };
+
+    return { user, token: "local_token_" + Date.now() };
   }
 
   /**
    * Déconnexion
    */
   logout(): void {
-    if (typeof window === 'undefined') return;
+    if (typeof window === "undefined") return;
     localStorage.removeItem(this.currentUserKey);
   }
 }
@@ -306,17 +317,20 @@ class FileStorage {
   async uploadFile(file: File): Promise<{ file_url: string }> {
     // Stocke l'URL dans le localStorage pour la persistance
     const fileKey = `vibe_file_${generateId()}`;
-    
-    if (typeof window === 'undefined') {
+
+    if (typeof window === "undefined") {
       // Pour SSR, retourne une URL vide
-      return { file_url: '' };
+      return { file_url: "" };
     }
-    
+
     // LIMITE : Ne stocke pas les fichiers de plus de 1MB en base64 dans localStorage
     const MAX_SIZE_FOR_LOCALSTORAGE = 1024 * 1024; // 1MB
-    
+
     // Pour les images, on peut les convertir en base64 pour la persistance
-    if (file.type.startsWith('image/') && file.size <= MAX_SIZE_FOR_LOCALSTORAGE) {
+    if (
+      file.type.startsWith("image/") &&
+      file.size <= MAX_SIZE_FOR_LOCALSTORAGE
+    ) {
       const reader = new FileReader();
       return new Promise((resolve, reject) => {
         reader.onloadend = () => {
@@ -325,8 +339,10 @@ class FileStorage {
             localStorage.setItem(fileKey, base64);
             resolve({ file_url: base64 });
           } catch (error: any) {
-            if (error.name === 'QuotaExceededError') {
-              console.warn('[FileStorage] Quota exceeded, using blob URL instead');
+            if (error.name === "QuotaExceededError") {
+              console.warn(
+                "[FileStorage] Quota exceeded, using blob URL instead"
+              );
               // Fallback : utilise une URL blob si le quota est dépassé
               const blobUrl = URL.createObjectURL(file);
               resolve({ file_url: blobUrl });
@@ -335,7 +351,7 @@ class FileStorage {
             }
           }
         };
-        reader.onerror = () => reject(new Error('Failed to read file'));
+        reader.onerror = () => reject(new Error("Failed to read file"));
         reader.readAsDataURL(file);
       });
     } else {
@@ -351,13 +367,13 @@ class FileStorage {
  * Export des gestionnaires de stockage
  */
 export const storage = {
-  Post: new LocalStorageManager('post'),
-  Story: new LocalStorageManager('story'),
-  Like: new LocalStorageManager('like'),
-  Comment: new LocalStorageManager('comment'),
-  Conversation: new LocalStorageManager('conversation'),
-  Message: new LocalStorageManager('message'),
-  Follow: new LocalStorageManager('follow'),
+  Post: new LocalStorageManager("post"),
+  Story: new LocalStorageManager("story"),
+  Like: new LocalStorageManager("like"),
+  Comment: new LocalStorageManager("comment"),
+  Conversation: new LocalStorageManager("conversation"),
+  Message: new LocalStorageManager("message"),
+  Follow: new LocalStorageManager("follow"),
   User: new UserStorage(),
   File: new FileStorage(),
 };
@@ -367,11 +383,11 @@ export const storage = {
  * Appelé automatiquement au chargement côté client
  */
 export function initializeWithMockData(): void {
-  if (typeof window === 'undefined') return;
+  if (typeof window === "undefined") return;
 
   // Clé pour vérifier si l'initialisation a déjà été faite
   // Incrémente la version pour forcer la réinitialisation après modification des mocks
-  const initKey = 'vibe_mock_initialized_v3';
+  const initKey = "vibe_mock_initialized_v3";
   const isInitialized = localStorage.getItem(initKey);
 
   // Vérifie si les posts sont déjà initialisés
@@ -379,32 +395,34 @@ export function initializeWithMockData(): void {
   if (existingPosts.length > 0 && isInitialized) return;
 
   // Import dynamique pour éviter les problèmes SSR
-  import('@/data/mockPosts').then(({ mockPosts }) => {
-    // Sauvegarde directement tous les posts mock
-    const posts = mockPosts.map((post: any) => ({
-      ...post,
-      created_date: post.created_date || new Date().toISOString(),
-      updated_date: new Date().toISOString(),
-    }));
+  import("@/data/mockPosts")
+    .then(({ mockPosts }) => {
+      // Sauvegarde directement tous les posts mock
+      const posts = mockPosts.map((post: any) => ({
+        ...post,
+        created_date: post.created_date || new Date().toISOString(),
+        updated_date: new Date().toISOString(),
+      }));
 
-    storage.Post.saveAll(posts);
-    try {
-      localStorage.setItem(initKey, 'true');
-    } catch (error: any) {
-      if (error.name === 'QuotaExceededError') {
-        console.error('[LocalStorage] Quota exceeded during initialization');
-      } else {
-        console.error('[LocalStorage] Error during initialization:', error);
+      storage.Post.saveAll(posts);
+      try {
+        localStorage.setItem(initKey, "true");
+      } catch (error: any) {
+        if (error.name === "QuotaExceededError") {
+          console.error("[LocalStorage] Quota exceeded during initialization");
+        } else {
+          console.error("[LocalStorage] Error during initialization:", error);
+        }
       }
-    }
 
-    console.log('✅ Mock posts initialized:', posts.length);
+      console.log("✅ Mock posts initialized:", posts.length);
 
-    // Ne pas forcer le rechargement - les données sont déjà disponibles
-    // window.location.reload(); // DÉSACTIVÉ pour éviter les boucles de rechargement
-  }).catch((err) => {
-    console.error('Failed to load mock posts:', err);
-  });
+      // Ne pas forcer le rechargement - les données sont déjà disponibles
+      // window.location.reload(); // DÉSACTIVÉ pour éviter les boucles de rechargement
+    })
+    .catch((err) => {
+      console.error("Failed to load mock posts:", err);
+    });
 }
 
 // Auto-initialisation côté client DÉSACTIVÉE
@@ -417,4 +435,3 @@ export function initializeWithMockData(): void {
 //     initializeWithMockData();
 //   }
 // }
-

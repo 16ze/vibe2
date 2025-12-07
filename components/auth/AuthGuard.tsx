@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useEffect } from "react";
-import { useRouter } from "next/router";
 import { useAuth } from "@/contexts/AuthContext";
+import { useRouter } from "next/router";
+import React, { useEffect } from "react";
 
 /**
  * Liste des routes publiques (accessibles sans authentification)
@@ -28,6 +28,7 @@ interface AuthGuardProps {
 export default function AuthGuard({ children }: AuthGuardProps) {
   const { user, isLoading } = useAuth();
   const router = useRouter();
+  const [hasRedirected, setHasRedirected] = React.useState(false);
 
   // Vérifie si la route actuelle est publique
   const isPublicPath = PUBLIC_PATHS.includes(router.pathname);
@@ -36,20 +37,32 @@ export default function AuthGuard({ children }: AuthGuardProps) {
    * Redirection intelligente :
    * 1. Si utilisateur connecté ET route publique → redirige vers /feed
    * 2. Si utilisateur non connecté ET route non publique → redirige vers /
+   * PROTECTION : Utilise hasRedirected pour éviter les boucles infinies
    */
   useEffect(() => {
-    if (!isLoading) {
-      // Si pas connecté et page privée -> Hop, Login
-      if (!user && !isPublicPath) {
-        router.push("/");
-      }
+    // Ne fait rien pendant le chargement ou si on a déjà redirigé
+    if (isLoading || hasRedirected) return;
 
-      // Si connecté et page publique -> Hop, Feed
-      if (user && isPublicPath) {
-        router.push("/feed");
-      }
+    // Si pas connecté et page privée -> Redirige vers Login
+    if (!user && !isPublicPath) {
+      setHasRedirected(true);
+      router.push("/").catch((err) => {
+        console.error("[AuthGuard] Error redirecting to /:", err);
+        setHasRedirected(false); // Réinitialise en cas d'erreur
+      });
+      return;
     }
-  }, [user, isLoading, router, isPublicPath]);
+
+    // Si connecté et page publique -> Redirige vers Feed
+    if (user && isPublicPath) {
+      setHasRedirected(true);
+      router.push("/feed").catch((err) => {
+        console.error("[AuthGuard] Error redirecting to /feed:", err);
+        setHasRedirected(false); // Réinitialise en cas d'erreur
+      });
+      return;
+    }
+  }, [user, isLoading, router, isPublicPath, hasRedirected]);
 
   // 1. Pendant le chargement initial -> Écran Noir
   if (isLoading) {
@@ -69,4 +82,3 @@ export default function AuthGuard({ children }: AuthGuardProps) {
   // 4. Tout est bon, on affiche la page (avec isPublicRoute pour compatibilité)
   return <>{children({ isPublicRoute: isPublicPath })}</>;
 }
-

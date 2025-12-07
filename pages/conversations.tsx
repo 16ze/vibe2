@@ -1,12 +1,17 @@
 "use client";
 
-import { vibe } from "@/api/vibeClient";
 import AddFriendModal from "@/components/chat/AddFriendModal";
 import ChatView from "@/components/chat/ChatView";
 import ConversationItem from "@/components/chat/ConversationItem";
 import UserSelectorModal from "@/components/chat/UserSelectorModal";
+import { useAuth } from "@/contexts/AuthContext";
 import { useUI } from "@/contexts/UIContext";
 import { useSwipeNavigation } from "@/hooks/useSwipeNavigation";
+import {
+  getConversations,
+  getOrCreateConversation,
+} from "@/services/chatService";
+import { getActiveStories } from "@/services/postService";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
@@ -21,8 +26,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 export default function Conversations() {
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [selectedConversation, setSelectedConversation] = useState(null);
+  const { user: currentUser } = useAuth();
+  const [selectedConversation, setSelectedConversation] = useState<any>(null);
   const [hasActiveStory, setHasActiveStory] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -71,34 +76,21 @@ export default function Conversations() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Une seule fois au montage, showBottomNav est stable
 
-  /**
-   * Récupère l'utilisateur actuel
-   */
-  useEffect(() => {
-    vibe.auth
-      .me()
-      .then(setCurrentUser)
-      .catch(() => {});
-  }, []);
+  // currentUser vient maintenant de useAuth()
 
   /**
    * Vérifie si l'utilisateur a une story active (non expirée)
    */
   useEffect(() => {
     const checkActiveStory = async () => {
-      if (!currentUser?.email) return;
+      if (!currentUser?.id) return;
 
       try {
-        const stories = await vibe.entities.Story.filter(
-          { created_by: currentUser.email },
-          "-created_date"
+        const stories = await getActiveStories(50);
+        const userStories = stories.filter(
+          (story: any) => story.user_id === currentUser.id
         );
-        const now = new Date();
-        const activeStory = stories.find((story: any) => {
-          if (!story.expires_at) return false;
-          return new Date(story.expires_at) > now;
-        });
-        setHasActiveStory(!!activeStory);
+        setHasActiveStory(userStories.length > 0);
       } catch (err) {
         console.error("Error checking active story:", err);
       }
@@ -109,96 +101,50 @@ export default function Conversations() {
     }
   }, [currentUser]);
 
-  /**
-   * Crée une conversation de bienvenue si aucune n'existe
-   */
-  useEffect(() => {
-    const createWelcomeConversation = async () => {
-      if (!currentUser?.email) return;
+  // Supprimé : création automatique de conversation de bienvenue
+  // Les conversations sont maintenant créées à la demande via getOrCreateConversation
 
-      try {
-        const existingConversations = await vibe.entities.Conversation.filter(
-          { created_by: currentUser.email },
-          "-last_message_at"
-        );
-
-        // Si aucune conversation n'existe, crée une conversation de bienvenue
-        if (existingConversations.length === 0) {
-          const welcomeConversation = await vibe.entities.Conversation.create({
-            participant_name: "Team Vibe",
-            participant_avatar: null,
-            participant_email: "team@vibe.app",
-            last_message: "Bienvenue sur Vibe !",
-            last_message_at: new Date().toISOString(),
-            last_message_type: "text", // Type du dernier message pour l'icône
-            unread_count: 1,
-            is_online: false,
-            created_by: currentUser.email,
-            created_date: new Date().toISOString(),
-          });
-
-          // Crée le message de bienvenue
-          await vibe.entities.Message.create({
-            conversation_id: welcomeConversation.id,
-            sender_email: "team@vibe.app",
-            sender_name: "Team Vibe",
-            content:
-              "Bienvenue sur Vibe !\n\nCommence à partager tes moments avec tes amis.",
-            media_type: "text",
-            created_date: new Date().toISOString(),
-          });
-
-          // Invalide le cache pour rafraîchir la liste
-          queryClient.invalidateQueries({
-            queryKey: ["conversations", currentUser.email],
-          });
-        }
-      } catch (error) {
-        console.error("Error creating welcome conversation:", error);
-      }
-    };
-
-    if (currentUser) {
-      createWelcomeConversation();
-    }
-  }, [currentUser, queryClient]);
-
+  // Récupère les conversations depuis Supabase
   const { data: conversations = [], isLoading } = useQuery({
-    queryKey: ["conversations", currentUser?.email],
+    queryKey: ["conversations", currentUser?.id],
     queryFn: async () => {
-      if (!currentUser?.email) return [];
-
-      const convs = await vibe.entities.Conversation.filter(
-        { created_by: currentUser.email },
-        "-last_message_at"
-      );
-
-      // Trie par updatedAt (last_message_at) - le plus récent en haut
-      return convs.sort((a: any, b: any) => {
-        const dateA = new Date(
-          a.last_message_at || a.created_date || 0
-        ).getTime();
-        const dateB = new Date(
-          b.last_message_at || b.created_date || 0
-        ).getTime();
-        return dateB - dateA;
-      });
+      if (!currentUser?.id) return [];
+      return await getConversations(currentUser.id);
     },
-    enabled: !!currentUser,
+    enabled: !!currentUser?.id,
     refetchOnWindowFocus: true, // Rafraîchit quand on revient sur la page
   });
+
+  /**
+   * Transforme les conversations Supabase en format compatible avec ConversationItem
+   */
+  const transformedConversations = conversations.map((conv: any) => ({
+    id: conv.id,
+    participant_name:
+      conv.participant?.full_name || conv.participant?.username || "Anonyme",
+    participant_avatar: conv.participant?.avatar_url,
+    participant_email: conv.participant?.id, // Utilise l'ID comme email pour compatibilité
+    last_message: conv.last_message,
+    last_message_at: conv.last_message_at || conv.updated_at,
+    last_message_type: conv.last_message_type,
+    last_message_sender_id: conv.last_message_sender_id,
+    is_last_message_read: conv.is_last_message_read,
+    unread_count: conv.is_last_message_read ? 0 : 1,
+    is_online: false,
+    created_date: conv.created_at,
+  }));
 
   /**
    * Filtre les conversations selon la recherche
    */
   const filteredConversations =
     isSearchOpen && searchQuery
-      ? conversations.filter((conv) =>
+      ? transformedConversations.filter((conv) =>
           conv.participant_name
             ?.toLowerCase()
             .includes(searchQuery.toLowerCase())
         )
-      : conversations;
+      : transformedConversations;
 
   /**
    * Gère le clic sur l'avatar (redirige vers story ou profile)
@@ -206,9 +152,9 @@ export default function Conversations() {
   const handleAvatarClick = () => {
     if (typeof window === "undefined") return;
 
-    if (hasActiveStory && currentUser?.email) {
-      window.location.href = `/feed?view_story=true&user_email=${encodeURIComponent(
-        currentUser.email
+    if (hasActiveStory && currentUser?.id) {
+      window.location.href = `/feed?view_story=true&user_id=${encodeURIComponent(
+        currentUser.id
       )}`;
     } else {
       router.push("/profile");
@@ -229,44 +175,49 @@ export default function Conversations() {
    * Gère la sélection d'un utilisateur pour créer/ouvrir une conversation
    */
   const handleSelectUser = async (user: any) => {
-    if (!currentUser?.email) return;
+    if (!currentUser?.id || !user?.id) return;
 
     try {
-      // Vérifie si une conversation existe déjà avec cet utilisateur
-      const existingConversations = await vibe.entities.Conversation.filter(
-        {
-          created_by: currentUser.email,
-          participant_email: user.email,
-        },
-        "-last_message_at"
+      // Crée ou récupère la conversation via Supabase
+      const conversationId = await getOrCreateConversation(
+        currentUser.id,
+        user.id
       );
 
-      if (existingConversations.length > 0) {
-        // Si une conversation existe, l'ouvre
-        setSelectedConversation(existingConversations[0]);
-      } else {
-        // Sinon, crée une nouvelle conversation
-        const newConversation = await vibe.entities.Conversation.create({
-          participant_name: user.full_name || user.username || user.email,
-          participant_avatar: user.avatar_url,
-          participant_email: user.email,
-          last_message: null,
-          last_message_at: null,
-          last_message_type: null,
-          unread_count: 0,
+      // Récupère la conversation complète pour l'afficher
+      const allConversations = await getConversations(currentUser.id);
+      const conversation = allConversations.find(
+        (c: any) => c.id === conversationId
+      );
+
+      if (conversation) {
+        // Transforme en format compatible
+        const transformedConv = {
+          id: conversation.id,
+          participant_name:
+            conversation.participant?.full_name ||
+            conversation.participant?.username ||
+            "Anonyme",
+          participant_avatar: conversation.participant?.avatar_url,
+          participant_email: conversation.participant?.id,
+          last_message: conversation.last_message,
+          last_message_at:
+            conversation.last_message_at || conversation.updated_at,
+          last_message_type: conversation.last_message_type,
+          last_message_sender_id: conversation.last_message_sender_id,
+          is_last_message_read: conversation.is_last_message_read,
+          unread_count: conversation.is_last_message_read ? 0 : 1,
           is_online: false,
-          created_by: currentUser.email,
-          created_date: new Date().toISOString(),
-        });
+          created_date: conversation.created_at,
+        };
 
-        // Invalide le cache pour rafraîchir la liste
-        queryClient.invalidateQueries({
-          queryKey: ["conversations", currentUser.email],
-        });
-
-        // Ouvre la nouvelle conversation
-        setSelectedConversation(newConversation);
+        setSelectedConversation(transformedConv);
       }
+
+      // Invalide le cache pour rafraîchir la liste
+      queryClient.invalidateQueries({
+        queryKey: ["conversations", currentUser.id],
+      });
     } catch (error) {
       console.error("Error creating/opening conversation:", error);
     }

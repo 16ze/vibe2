@@ -14,7 +14,7 @@ export interface Follower {
     username: string;
     full_name: string;
     avatar_url: string;
-  };
+  } | null;
 }
 
 export interface Following {
@@ -27,7 +27,7 @@ export interface Following {
     username: string;
     full_name: string;
     avatar_url: string;
-  };
+  } | null;
 }
 
 /**
@@ -46,6 +46,13 @@ export async function getFollowers(userId: string): Promise<Follower[]> {
 
     if (followsError) {
       console.error("[socialService] Error fetching follows:", followsError);
+      // Si erreur 42703 (colonne inexistante) ou 400, retourne tableau vide
+      if (followsError.code === "42703" || followsError.code === "400") {
+        console.warn(
+          "[socialService] Table 'follows' may not exist or has wrong structure"
+        );
+        return [];
+      }
       throw followsError;
     }
 
@@ -55,6 +62,10 @@ export async function getFollowers(userId: string): Promise<Follower[]> {
 
     // Récupère les profils des followers
     const followerIds = follows.map((f) => f.follower_id);
+    if (followerIds.length === 0) {
+      return [];
+    }
+
     const { data: profiles, error: profilesError } = await supabase
       .from("profiles")
       .select("id, username, full_name, avatar_url")
@@ -62,13 +73,24 @@ export async function getFollowers(userId: string): Promise<Follower[]> {
 
     if (profilesError) {
       console.error("[socialService] Error fetching profiles:", profilesError);
+      // Si erreur 42703 (colonne inexistante) ou 400, retourne les follows sans profils
+      if (profilesError.code === "42703" || profilesError.code === "400") {
+        console.warn(
+          "[socialService] Table 'profiles' may not exist or has wrong structure"
+        );
+        return follows.map((follow) => ({
+          id: follow.id,
+          follower_id: follow.follower_id,
+          following_id: follow.following_id,
+          created_at: follow.created_at,
+          follower: null,
+        }));
+      }
       throw profilesError;
     }
 
     // Combine les données
-    const profileMap = new Map(
-      (profiles || []).map((p) => [p.id, p])
-    );
+    const profileMap = new Map((profiles || []).map((p) => [p.id, p]));
 
     return follows.map((follow) => ({
       id: follow.id,
@@ -77,8 +99,9 @@ export async function getFollowers(userId: string): Promise<Follower[]> {
       created_at: follow.created_at,
       follower: profileMap.get(follow.follower_id) || null,
     }));
-  } catch (error) {
+  } catch (error: any) {
     console.error("[socialService] Error in getFollowers:", error);
+    // Retourne tableau vide en cas d'erreur pour éviter de planter l'app
     return [];
   }
 }
@@ -99,6 +122,13 @@ export async function getFollowing(userId: string): Promise<Following[]> {
 
     if (followsError) {
       console.error("[socialService] Error fetching follows:", followsError);
+      // Si erreur 42703 (colonne inexistante) ou 400, retourne tableau vide
+      if (followsError.code === "42703" || followsError.code === "400") {
+        console.warn(
+          "[socialService] Table 'follows' may not exist or has wrong structure"
+        );
+        return [];
+      }
       throw followsError;
     }
 
@@ -108,6 +138,10 @@ export async function getFollowing(userId: string): Promise<Following[]> {
 
     // Récupère les profils des following
     const followingIds = follows.map((f) => f.following_id);
+    if (followingIds.length === 0) {
+      return [];
+    }
+
     const { data: profiles, error: profilesError } = await supabase
       .from("profiles")
       .select("id, username, full_name, avatar_url")
@@ -115,13 +149,24 @@ export async function getFollowing(userId: string): Promise<Following[]> {
 
     if (profilesError) {
       console.error("[socialService] Error fetching profiles:", profilesError);
+      // Si erreur 42703 (colonne inexistante) ou 400, retourne les follows sans profils
+      if (profilesError.code === "42703" || profilesError.code === "400") {
+        console.warn(
+          "[socialService] Table 'profiles' may not exist or has wrong structure"
+        );
+        return follows.map((follow) => ({
+          id: follow.id,
+          follower_id: follow.follower_id,
+          following_id: follow.following_id,
+          created_at: follow.created_at,
+          following: null,
+        }));
+      }
       throw profilesError;
     }
 
     // Combine les données
-    const profileMap = new Map(
-      (profiles || []).map((p) => [p.id, p])
-    );
+    const profileMap = new Map((profiles || []).map((p) => [p.id, p]));
 
     return follows.map((follow) => ({
       id: follow.id,
@@ -130,8 +175,9 @@ export async function getFollowing(userId: string): Promise<Following[]> {
       created_at: follow.created_at,
       following: profileMap.get(follow.following_id) || null,
     }));
-  } catch (error) {
+  } catch (error: any) {
     console.error("[socialService] Error in getFollowing:", error);
+    // Retourne tableau vide en cas d'erreur pour éviter de planter l'app
     return [];
   }
 }
@@ -203,15 +249,20 @@ export async function followUser(
 
     // Crée une notification pour la personne suivie (si ce n'est pas soi-même)
     if (currentUserId !== targetUserId) {
-      const { error: notifError } = await supabase.from("notifications").insert({
-        user_id: targetUserId,
-        actor_id: currentUserId,
-        type: "follow",
-        is_read: false,
-      });
+      const { error: notifError } = await supabase
+        .from("notifications")
+        .insert({
+          user_id: targetUserId,
+          actor_id: currentUserId,
+          type: "follow",
+          is_read: false,
+        });
 
       if (notifError) {
-        console.error("[socialService] Error creating notification:", notifError);
+        console.error(
+          "[socialService] Error creating notification:",
+          notifError
+        );
         // Ne pas throw ici, la notification est secondaire
       }
     }
@@ -247,6 +298,35 @@ export async function unfollowUser(
     console.log("[socialService] Successfully unfollowed user:", targetUserId);
   } catch (error) {
     console.error("[socialService] Error in unfollowUser:", error);
+    throw error;
+  }
+}
+
+/**
+ * Supprime un follower (refuse une demande de suivi)
+ * Supprime la relation où followerId suit currentUserId
+ * @param currentUserId - ID de l'utilisateur actuel (celui qui est suivi)
+ * @param followerId - ID du follower à retirer (celui qui suit)
+ */
+export async function removeFollower(
+  currentUserId: string,
+  followerId: string
+): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from("follows")
+      .delete()
+      .eq("follower_id", followerId) // ← Celui qui suit
+      .eq("following_id", currentUserId); // ← Celui qui est suivi
+
+    if (error) {
+      console.error("[socialService] Error removing follower:", error);
+      throw error;
+    }
+
+    console.log("[socialService] Successfully removed follower:", followerId);
+  } catch (error) {
+    console.error("[socialService] Error in removeFollower:", error);
     throw error;
   }
 }
@@ -366,7 +446,12 @@ export async function searchUsers(
 
     const searchTerm = `%${query.trim()}%`;
 
-    console.log("[socialService] Searching users with term:", searchTerm, "currentUserId:", currentUserId);
+    console.log(
+      "[socialService] Searching users with term:",
+      searchTerm,
+      "currentUserId:",
+      currentUserId
+    );
 
     // Recherche dans les profils par username ou full_name (insensible à la casse)
     // Utilisation de deux requêtes séparées pour éviter les problèmes de syntaxe
@@ -387,6 +472,19 @@ export async function searchUsers(
         .limit(limit),
     ]);
 
+    // ========== LOGS DE DEBUG SUPABASE ==========
+    console.log("🔍 [DEBUG] Username query result:", {
+      data: usernameResults.data,
+      error: usernameResults.error,
+      count: usernameResults.data?.length || 0,
+    });
+    console.log("🔍 [DEBUG] Full name query result:", {
+      data: fullNameResults.data,
+      error: fullNameResults.error,
+      count: fullNameResults.data?.length || 0,
+    });
+    // ============================================
+
     // Combine les résultats et supprime les doublons
     const allResults = [
       ...(usernameResults.data || []),
@@ -404,10 +502,16 @@ export async function searchUsers(
     console.log("[socialService] Found users:", limitedResults.length);
 
     if (usernameResults.error) {
-      console.error("[socialService] Error searching by username:", usernameResults.error);
+      console.error(
+        "[socialService] Error searching by username:",
+        usernameResults.error
+      );
     }
     if (fullNameResults.error) {
-      console.error("[socialService] Error searching by full_name:", fullNameResults.error);
+      console.error(
+        "[socialService] Error searching by full_name:",
+        fullNameResults.error
+      );
     }
 
     if (usernameResults.error && fullNameResults.error) {
@@ -460,4 +564,3 @@ export async function getRelationships(currentUserId: string): Promise<
     return [];
   }
 }
-

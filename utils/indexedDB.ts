@@ -174,6 +174,8 @@ class UserStorage {
 
   /**
    * Récupère l'utilisateur actuel
+   * PRODUCTION : Ne crée PLUS d'utilisateur par défaut
+   * Retourne null si aucun utilisateur connecté
    * @returns Promise avec l'utilisateur actuel ou null
    */
   async getCurrentUser(): Promise<any | null> {
@@ -181,21 +183,13 @@ class UserStorage {
 
     try {
       const data = await get<any>(this.currentUserKey);
-      if (data) return data;
-
-      // Crée un utilisateur par défaut si aucun n'existe
-      const defaultUser = {
-        email: "demo@vibe.app",
-        full_name: "Anonyme",
-        username: "anonyme",
-        avatar_url: null,
-        bio: null,
-        created_date: new Date().toISOString(),
-      };
-      await this.setCurrentUser(defaultUser);
-      return defaultUser;
+      if (!data) {
+        console.warn("[UserStorage] No user logged in");
+        return null;
+      }
+      return data;
     } catch (error) {
-      console.error("Error getting current user:", error);
+      console.error("[UserStorage] Error getting current user:", error);
       return null;
     }
   }
@@ -589,10 +583,10 @@ export async function migrateFromLocalStorage(): Promise<void> {
     try {
       localStorage.setItem(migrationKey, "true");
     } catch (error: any) {
-      if (error.name === 'QuotaExceededError') {
-        console.error('[IndexedDB] Quota exceeded when saving migration flag');
+      if (error.name === "QuotaExceededError") {
+        console.error("[IndexedDB] Quota exceeded when saving migration flag");
       } else {
-        console.error('[IndexedDB] Error saving migration flag:', error);
+        console.error("[IndexedDB] Error saving migration flag:", error);
       }
     }
     console.log("Migration completed successfully");

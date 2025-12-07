@@ -70,12 +70,14 @@ async function fetchProfile(
     try {
       const { data, error } = await supabase
         .from("profiles")
-        .select("username, full_name, avatar_url, bio, score, created_at, email")
+        .select("username, full_name, avatar_url, bio, score, created_at")
         .eq("id", userId)
         .single();
 
       if (data && !error) {
-        console.log(`[AuthContext] Profile found on attempt ${i + 1}/${retries}`);
+        console.log(
+          `[AuthContext] Profile found on attempt ${i + 1}/${retries}`
+        );
         return {
           username: data?.username || "",
           full_name: data?.full_name || "",
@@ -97,7 +99,9 @@ async function fetchProfile(
 
       // Sinon, on attend avant de réessayer
       console.log(
-        `[AuthContext] Profile not found, retrying in ${delayMs}ms... (attempt ${i + 1}/${retries})`
+        `[AuthContext] Profile not found, retrying in ${delayMs}ms... (attempt ${
+          i + 1
+        }/${retries})`
       );
       await new Promise((resolve) => setTimeout(resolve, delayMs));
     } catch (error) {
@@ -146,6 +150,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   /**
    * Charge l'utilisateur complet (Auth + Profile)
+   * Si le profil n'existe pas, utilise les métadonnées Auth comme fallback
    */
   const loadUserWithProfile = useCallback(
     async (supabaseUser: SupabaseUser | null) => {
@@ -155,6 +160,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
 
       const profile = await fetchProfile(supabaseUser.id);
+      // mapSupabaseUserToAppUser gère le cas où profile est null (utilise les métadonnées)
       const appUser = mapSupabaseUserToAppUser(supabaseUser, profile);
       setUser(appUser);
       return appUser;
@@ -186,7 +192,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
           setUser(null);
         } else if (session?.user) {
           await loadUserWithProfile(session.user);
-          console.log("[AuthContext] Session restored for:", session.user.email);
+          console.log(
+            "[AuthContext] Session restored for:",
+            session.user.email
+          );
         } else {
           setUser(null);
         }
@@ -250,21 +259,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const isEmail = identifier.includes("@");
 
         if (!isEmail) {
-          // C'est un pseudo -> Récupère l'email depuis la table profiles
-          console.log("[AuthContext] Login with username:", identifier);
-
-          const { data: profile, error: profileError } = await supabase
-            .from("profiles")
-            .select("email")
-            .eq("username", identifier.toLowerCase())
-            .single();
-
-          if (profileError || !profile?.email) {
-            throw new Error("Utilisateur introuvable");
-          }
-
-          email = profile.email;
-          console.log("[AuthContext] Found email for username:", email);
+          // C'est un pseudo -> L'email n'est pas stocké dans profiles
+          // Pour l'instant, on demande à l'utilisateur de se connecter avec son email
+          // TODO: Implémenter une fonction RPC Supabase pour récupérer l'email depuis auth.users
+          throw new Error(
+            "Veuillez vous connecter avec votre adresse email. La connexion par pseudo sera disponible prochainement."
+          );
         }
 
         // Connexion avec l'email

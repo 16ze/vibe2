@@ -1,17 +1,18 @@
 "use client";
 
+import { useUI } from "@/contexts/UIContext";
+import { supabase } from "@/lib/supabase";
 import {
   followUser,
   getRelationships,
+  removeFollower,
   searchUsers,
   unfollowUser,
 } from "@/services/socialService";
-import { useUI } from "@/contexts/UIContext";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, Search, UserPlus, X, X as XIcon } from "lucide-react";
-import { useEffect, useState, useMemo } from "react";
-import { supabase } from "@/lib/supabase";
+import { useEffect, useMemo, useState } from "react";
 
 interface AddFriendModalProps {
   isOpen: boolean;
@@ -101,10 +102,35 @@ export default function AddFriendModal({
         console.log("[AddFriendModal] Search skipped: no query or user");
         return [];
       }
-      console.log("[AddFriendModal] Searching users with query:", debouncedSearchQuery);
+
+      // ========== LOGS DE DEBUG ==========
+      console.log("🔍 [DEBUG] Current User Object:", currentUser);
+      console.log("🔍 [DEBUG] Current User ID:", currentUser.id);
+      console.log("🔍 [DEBUG] Search Query:", debouncedSearchQuery);
+      // ====================================
+
+      console.log(
+        "[AddFriendModal] Searching users with query:",
+        debouncedSearchQuery
+      );
+
       try {
-        const results = await searchUsers(debouncedSearchQuery, currentUser.id, 20);
-        console.log("[AddFriendModal] Search results:", results.length, results);
+        const results = await searchUsers(
+          debouncedSearchQuery,
+          currentUser.id,
+          20
+        );
+
+        // ========== LOGS DE DEBUG ==========
+        console.log("🔍 [DEBUG] Search Results:", results);
+        console.log("🔍 [DEBUG] Number of results:", results.length);
+        // ====================================
+
+        console.log(
+          "[AddFriendModal] Search results:",
+          results.length,
+          results
+        );
         return results;
       } catch (error) {
         console.error("[AddFriendModal] Error searching users:", error);
@@ -234,6 +260,24 @@ export default function AddFriendModal({
       });
       queryClient.invalidateQueries({
         queryKey: ["search-users", debouncedSearchQuery, currentUser?.id],
+      });
+    },
+  });
+
+  /**
+   * Mutation pour supprimer un follower (refuser une demande)
+   */
+  const removeFollowerMutation = useMutation({
+    mutationFn: async (followerId: string) => {
+      if (!currentUser?.id) throw new Error("User not authenticated");
+      await removeFollower(currentUser.id, followerId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["relationships", currentUser?.id],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["request-users"],
       });
     },
   });
@@ -461,8 +505,10 @@ export default function AddFriendModal({
                           </motion.button>
                           <motion.button
                             whileTap={{ scale: 0.95 }}
-                            onClick={() => unfollowMutation.mutate(user.id)}
-                            disabled={unfollowMutation.isPending}
+                            onClick={() =>
+                              removeFollowerMutation.mutate(user.id)
+                            }
+                            disabled={removeFollowerMutation.isPending}
                             className="px-4 py-2 bg-gray-200 text-gray-700 rounded-full text-sm font-medium hover:bg-gray-300 transition-colors flex items-center gap-2 disabled:opacity-50"
                           >
                             <XIcon className="w-4 h-4" />

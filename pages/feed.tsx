@@ -1,14 +1,17 @@
 "use client";
 
-import { vibe } from "@/api/vibeClient";
 import CommentDrawer from "@/components/comments/CommentDrawer";
 import ComposeModal from "@/components/create/ComposeModal";
 import PostCard from "@/components/feed/PostCard";
 import StoriesBar from "@/components/feed/StoriesBar";
 import TextPostCard from "@/components/feed/TextPostCard";
 import StoryViewer from "@/components/story/StoryViewer";
+import { useAuth } from "@/contexts/AuthContext";
+import { useNotification } from "@/contexts/NotificationContext";
 import { useSwipeNavigation } from "@/hooks/useSwipeNavigation";
-import { Post } from "@/types/post";
+import { supabase } from "@/lib/supabase";
+import { getActiveStories, getFeed, toggleLike } from "@/services/postService";
+import { getFollowing } from "@/services/socialService";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import { Bell, Loader2, Plus, Search } from "lucide-react";
@@ -16,13 +19,15 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 export default function Feed() {
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const { user: currentUser } = useAuth();
+  const { unreadActivityCount } = useNotification();
   const [viewingStories, setViewingStories] = useState<any>(null);
   const [isMounted, setIsMounted] = useState(false);
   const [isCommentOpen, setIsCommentOpen] = useState(false);
   const [activePostId, setActivePostId] = useState<string | null>(null);
   const [isComposeOpen, setIsComposeOpen] = useState(false);
   const [feedTab, setFeedTab] = useState<"foryou" | "following">("foryou");
+  const [followingIds, setFollowingIds] = useState<string[]>([]);
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -38,30 +43,26 @@ export default function Feed() {
   });
 
   /**
-   * Récupère le nombre de notifications non lues (mock pour l'instant)
-   * TODO: Remplacer par une vraie requête API
+   * Récupère les utilisateurs suivis pour filtrer le feed "Abonnements"
    */
-  const { data: unreadNotificationsCount = 3 } = useQuery({
-    queryKey: ["unreadNotificationsCount", currentUser?.email],
-    queryFn: async () => {
-      // Simulation : retourne 3 notifications non lues
-      // TODO: Remplacer par une vraie requête vers l'API
-      return 3;
-    },
-    enabled: !!currentUser?.email,
-    staleTime: 30000, // Cache pendant 30 secondes
-  });
-
-  /**
-   * IDs des utilisateurs suivis (mock temporaire)
-   * À remplacer par des données réelles depuis l'API
-   */
-  const MOCK_FOLLOWING_IDS = [
-    "sarah_photo",
-    "runner_paris",
-    "adventure_seeker",
-    "coffee_thoughts",
-  ];
+  useEffect(() => {
+    const loadFollowing = async () => {
+      if (!currentUser?.id || !isMounted) return;
+      try {
+        const following = await getFollowing(currentUser.id);
+        // Extrait les IDs des utilisateurs suivis
+        const ids = following
+          .map((f) => f.following_id || f.id)
+          .filter((id): id is string => !!id);
+        setFollowingIds(ids);
+      } catch (error) {
+        console.error("[Feed] Error loading following:", error);
+        // En cas d'erreur, on laisse followingIds vide (pas de filtre)
+        setFollowingIds([]);
+      }
+    };
+    loadFollowing();
+  }, [currentUser?.id, isMounted]);
 
   /**
    * Marque le composant comme monté côté client
@@ -71,34 +72,19 @@ export default function Feed() {
     setIsMounted(true);
   }, []);
 
-  useEffect(() => {
-    vibe.auth
-      .me()
-      .then(setCurrentUser)
-      .catch(() => {});
-  }, []);
-
+  // Récupère les posts depuis Supabase
   const { data: allPosts = [], isLoading: postsLoading } = useQuery({
-    queryKey: ["posts"],
-    queryFn: () => vibe.entities.Post.list("-created_date", 50),
+    queryKey: ["feed-posts"],
+    queryFn: () => getFeed(50),
+    enabled: !!currentUser && isMounted, // Attendre que le composant soit monté
   });
 
+  // Récupère les stories depuis Supabase
   const { data: stories = [] } = useQuery({
-    queryKey: ["stories"],
-    queryFn: () => vibe.entities.Story.list("-created_date", 50),
+    queryKey: ["feed-stories"],
+    queryFn: () => getActiveStories(50),
+    enabled: !!currentUser && isMounted, // Attendre que le composant soit monté
   });
-
-  /**
-   * Filtre les posts selon l'onglet actif
-   * - "foryou" : affiche tous les posts
-   * - "following" : affiche uniquement les posts des utilisateurs suivis
-   */
-  const posts =
-    feedTab === "following"
-      ? allPosts.filter((post: Post) =>
-          MOCK_FOLLOWING_IDS.includes(post.author_name)
-        )
-      : allPosts;
 
   /**
    * Détecte les query params pour ouvrir automatiquement une story
@@ -129,34 +115,39 @@ export default function Feed() {
     }
   }, [searchParams, stories, router, isMounted]);
 
-  const { data: likes = [] } = useQuery({
-    queryKey: ["likes", currentUser?.email],
-    queryFn: () =>
-      currentUser
-        ? vibe.entities.Like.filter({ user_email: currentUser.email })
-        : [],
-    enabled: !!currentUser,
+  // Récupère les likes de l'utilisateur actuel
+  const { data: userLikes = [] } = useQuery({
+    queryKey: ["user-likes", currentUser?.id],
+    queryFn: async () => {
+      if (!currentUser?.id) return [];
+      // Récupère tous les posts likés par l'utilisateur
+      const { data, error } = await supabase
+        .from("likes")
+        .select("post_id")
+        .eq("user_id", currentUser.id);
+      if (error) {
+        console.error("[Feed] Error fetching likes:", error);
+        return [];
+      }
+      return data || [];
+    },
+    enabled: !!currentUser?.id && isMounted, // Attendre que le composant soit monté
   });
+
+  const likedPostIds = new Set(userLikes.map((l: any) => l.post_id));
 
   const likeMutation = useMutation({
-    mutationFn: async (postId) => {
-      const existingLike = likes.find((l) => l.post_id === postId);
-      if (existingLike) {
-        await vibe.entities.Like.delete(existingLike.id);
-      } else {
-        await vibe.entities.Like.create({
-          post_id: postId,
-          user_email: currentUser.email,
-        });
-      }
+    mutationFn: async (postId: string) => {
+      if (!currentUser?.id) throw new Error("User not authenticated");
+      return await toggleLike(postId, currentUser.id);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["likes"] });
-      queryClient.invalidateQueries({ queryKey: ["posts"] });
+      queryClient.invalidateQueries({
+        queryKey: ["user-likes", currentUser?.id],
+      });
+      queryClient.invalidateQueries({ queryKey: ["feed-posts"] });
     },
   });
-
-  const likedPostIds = new Set(likes.map((l: any) => l.post_id));
 
   /**
    * Fonction pour ouvrir le drawer de commentaires
@@ -171,10 +162,8 @@ export default function Feed() {
   /**
    * Fonction de rendu conditionnel des posts
    * Affiche TextPostCard pour les posts texte, PostCard pour les médias (images/vidéos)
-   * Utilise le type discriminant pour déterminer le composant à afficher
    */
-  const renderPostCard = (post: Post, isLiked: boolean, onLike: () => void) => {
-    // TypeScript garantit que post.type est soit "media" soit "text"
+  const renderPostCard = (post: any, isLiked: boolean, onLike: () => void) => {
     if (post.type === "text") {
       return (
         <TextPostCard
@@ -188,8 +177,6 @@ export default function Feed() {
       );
     }
 
-    // TypeScript sait que post.type === "media" ici
-    // et que media_url est garanti d'exister
     return (
       <PostCard
         post={post}
@@ -211,6 +198,49 @@ export default function Feed() {
       setViewingStories(stories);
     }
   };
+
+  /**
+   * Transforme les posts Supabase en format compatible avec PostCard
+   * Calculé uniquement après le montage pour éviter les erreurs d'hydratation
+   */
+  const transformedPosts = isMounted
+    ? allPosts.map((post: any) => ({
+        id: post.id,
+        type: post.type === "text" ? "text" : "media",
+        media_url: post.media_url,
+        media_type:
+          post.type === "image"
+            ? "photo"
+            : post.type === "video"
+            ? "video"
+            : undefined,
+        caption: post.content,
+        content: post.content,
+        likes_count: post.likes_count || 0,
+        comments_count: post.comments_count || 0,
+        author_name:
+          post.profiles?.username || post.profiles?.full_name || "Anonyme",
+        author_avatar: post.profiles?.avatar_url,
+        created_date: post.created_at,
+      }))
+    : [];
+
+  /**
+   * Filtre les posts selon l'onglet actif
+   * - "foryou" : affiche tous les posts
+   * - "following" : affiche uniquement les posts des utilisateurs suivis
+   */
+  const posts = !isMounted
+    ? []
+    : feedTab === "following"
+    ? transformedPosts.filter((post: any) => {
+        // Trouve l'ID de l'auteur depuis le post Supabase
+        const postAuthorId = allPosts.find(
+          (p: any) => p.id === post.id
+        )?.user_id;
+        return postAuthorId && followingIds.includes(postAuthorId);
+      })
+    : transformedPosts;
 
   /**
    * Affiche un loader pendant l'hydratation côté client
@@ -326,12 +356,10 @@ export default function Feed() {
             >
               <Bell className="w-6 h-6 text-gray-900" />
               {/* Badge rouge si notifications non lues */}
-              {unreadNotificationsCount > 0 && (
+              {unreadActivityCount > 0 && (
                 <span className="absolute top-1.5 right-1.5 min-w-[18px] h-[18px] bg-red-500 rounded-full flex items-center justify-center px-1">
                   <span className="text-[10px] font-bold text-white">
-                    {unreadNotificationsCount > 9
-                      ? "9+"
-                      : unreadNotificationsCount}
+                    {unreadActivityCount > 9 ? "9+" : unreadActivityCount}
                   </span>
                 </span>
               )}
@@ -388,7 +416,7 @@ export default function Feed() {
         )
       ) : (
         <div className="divide-y divide-gray-100">
-          {posts.map((post: Post, index: number) => (
+          {posts.map((post: any, index: number) => (
             <motion.div
               key={post.id}
               initial={{ opacity: 0, y: 20 }}
@@ -400,7 +428,7 @@ export default function Feed() {
               }}
             >
               {renderPostCard(post, likedPostIds.has(post.id), () =>
-                likeMutation.mutate(post.id as any)
+                likeMutation.mutate(post.id)
               )}
             </motion.div>
           ))}

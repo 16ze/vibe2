@@ -1,9 +1,8 @@
 "use client";
 
-import React, { useEffect } from "react";
-import { useRouter } from "next/router";
-import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
+import { motion } from "framer-motion";
+import { useRouter } from "next/router";
 
 /**
  * Page d'accueil (Splash Screen) de l'application VIBE
@@ -18,12 +17,10 @@ export default function Index() {
   /**
    * Redirige automatiquement selon l'état de connexion
    * Si connecté → /feed
+   * NOTE: AuthGuard gère déjà cette redirection, donc on peut laisser vide
+   * pour éviter les conflits de redirection
    */
-  useEffect(() => {
-    if (!isLoading && user) {
-      router.push("/feed");
-    }
-  }, [user, isLoading, router]);
+  // useEffect supprimé - AuthGuard gère la redirection
 
   /**
    * SI : Chargement en cours OU Utilisateur détecté (en attente de redirect)
