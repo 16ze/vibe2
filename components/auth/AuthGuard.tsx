@@ -114,19 +114,40 @@ export default function AuthGuard({ children }: AuthGuardProps) {
     return null;
   }
 
-  // 1. Pendant le chargement initial -> Écran de chargement stable
+  // 1. Pendant le chargement initial -> Écran de chargement blanc (pas noir)
   if (isLoading) {
-    return <div className="min-h-screen bg-black" />;
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-gray-200 border-t-indigo-600 rounded-full animate-spin mx-auto mb-2" />
+          <p className="text-gray-500 text-sm">Chargement...</p>
+        </div>
+      </div>
+    );
   }
 
-  // 2. Si le router n'est pas prêt -> Écran de chargement stable
+  // 2. Si le router n'est pas prêt -> Écran de chargement blanc
   if (!router.isReady) {
-    return <div className="min-h-screen bg-black" />;
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-gray-200 border-t-indigo-600 rounded-full animate-spin mx-auto mb-2" />
+          <p className="text-gray-500 text-sm">Chargement...</p>
+        </div>
+      </div>
+    );
   }
 
-  // 3. Si on est en train de rediriger -> Écran de chargement stable (avec timeout de sécurité)
+  // 3. Si on est en train de rediriger -> Écran de chargement blanc (avec timeout de sécurité)
   if (isRedirecting) {
-    return <div className="min-h-screen bg-black" />;
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-gray-200 border-t-indigo-600 rounded-full animate-spin mx-auto mb-2" />
+          <p className="text-gray-500 text-sm">Redirection...</p>
+        </div>
+      </div>
+    );
   }
 
   // 4. Tout est bon, on affiche la page (avec isPublicRoute pour compatibilité)

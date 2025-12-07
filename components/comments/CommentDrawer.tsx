@@ -397,7 +397,8 @@ export default function CommentDrawer({
             </div>
 
             {/* Input Zone - Fixée en bas du drawer avec champ texte et bouton envoyer */}
-            <div className="border-t border-gray-100 p-4 bg-white">
+            {/* IMPORTANT : pb-safe pour éviter que l'input passe sous la BottomNav */}
+            <div className="border-t border-gray-100 p-4 pb-24 bg-white">
               <div className="flex items-end gap-3">
                 <div className="flex-1 flex items-end gap-2 bg-gray-100 rounded-3xl px-4 py-2.5">
                   <textarea

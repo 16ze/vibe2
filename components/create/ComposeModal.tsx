@@ -1,8 +1,8 @@
 "use client";
 
-import { vibe } from "@/api/vibeClient";
+import { useAuth } from "@/contexts/AuthContext";
 import { useUI } from "@/contexts/UIContext";
-import { TextPost } from "@/types/post";
+import { createPost } from "@/services/postService";
 import { useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
@@ -41,6 +41,7 @@ export default function ComposeModal({
    * Récupère les fonctions pour masquer/afficher la BottomNav
    */
   const { hideBottomNav, showBottomNav } = useUI();
+  const { user: currentUserAuth } = useAuth();
   const [content, setContent] = useState("");
   const [isPublishing, setIsPublishing] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -97,56 +98,34 @@ export default function ComposeModal({
 
   /**
    * Gère la publication du post
-   * Crée un TextPost conforme à l'interface TypeScript
+   * Utilise Supabase pour créer un post texte
    */
   const handlePublish = async () => {
     if (!content.trim() || isPublishing) return;
 
+    // Vérifie que l'utilisateur est connecté
+    const user = currentUser || currentUserAuth;
+    if (!user?.id) {
+      alert("Vous devez être connecté pour publier.");
+      return;
+    }
+
     setIsPublishing(true);
 
     try {
-      // Récupère l'utilisateur actuel si non fourni
-      let user = currentUser;
-      if (!user) {
-        try {
-          user = await vibe.auth.me();
-        } catch (error) {
-          // Utilisateur par défaut si pas de login
-          user = {
-            email: "user@vibe.app",
-            name: "Anonyme",
-          };
-        }
-      }
-
-      // Crée l'objet TextPost conforme à l'interface
-      const newPost: Omit<TextPost, "id"> = {
-        type: "text",
-        content: content.trim(),
-        author_name: user.name || user.email?.split("@")[0] || "Anonyme",
-        author_avatar: user.avatar,
-        created_by: user.email,
-        likes_count: 0,
-        comments_count: 0,
-        created_date: new Date().toISOString(),
-      };
-
-      // Sauvegarde le post via vibeClient
-      await vibe.entities.Post.create(newPost);
+      // Crée le post texte via Supabase (sans média)
+      await createPost(user.id, null, "text", content.trim());
 
       // Rafraîchit le feed en invalidant la query
+      queryClient.invalidateQueries({ queryKey: ["feed-posts"] });
       queryClient.invalidateQueries({ queryKey: ["posts"] });
+      queryClient.invalidateQueries({ queryKey: ["user-posts", user.id] });
 
       // Ferme le modal
       onClose();
-
-      // Optionnel : Dispatch un événement pour notifier d'autres composants
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent("post-published"));
-      }
     } catch (error) {
       console.error("Erreur lors de la publication du post:", error);
-      alert("Erreur lors de la publication. Veuillez réessayer.");
+      alert("Erreur lors de la publication : " + (error as Error).message);
     } finally {
       setIsPublishing(false);
     }

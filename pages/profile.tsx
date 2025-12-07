@@ -568,6 +568,10 @@ export default function Profile() {
                   onClick={async () => {
                     if (!currentUser) return;
                     try {
+                      // Ferme la modale AVANT la mise à jour pour éviter l'écran noir
+                      setIsEditModalOpen(false);
+                      
+                      // Met à jour le profil
                       await updateProfile({
                         full_name: editForm.full_name,
                         username: editForm.username,
@@ -575,12 +579,14 @@ export default function Profile() {
                         avatar_url: editForm.avatar_url,
                       });
 
-                      setIsEditModalOpen(false);
+                      // Rafraîchit les données après la mise à jour
                       await refreshProfile();
                       refetchStats();
                     } catch (error) {
                       console.error("Error updating profile:", error);
-                      alert("Erreur lors de la mise à jour");
+                      alert("Erreur lors de la mise à jour : " + (error as Error).message);
+                      // Rouvre la modale en cas d'erreur
+                      setIsEditModalOpen(true);
                     }
                   }}
                   className="text-indigo-600 font-semibold"

@@ -331,10 +331,12 @@ export async function removeFollower(
  */
 export async function getFollowersCount(userId: string): Promise<number> {
   try {
+    // CORRECTION : Utilise select avec count au lieu de head:true pour éviter les erreurs
     const { count, error } = await supabase
       .from("follows")
-      .select("*", { count: "exact", head: true })
-      .eq("following_id", userId);
+      .select("follower_id", { count: "exact" })
+      .eq("following_id", userId)
+      .limit(0); // Limite à 0 pour ne pas récupérer de données, juste le count
 
     if (error) {
       console.error("[socialService] Error counting followers:", error);
@@ -354,10 +356,12 @@ export async function getFollowersCount(userId: string): Promise<number> {
  */
 export async function getFollowingCount(userId: string): Promise<number> {
   try {
+    // CORRECTION : Utilise select avec count au lieu de head:true pour éviter les erreurs
     const { count, error } = await supabase
       .from("follows")
-      .select("*", { count: "exact", head: true })
-      .eq("follower_id", userId);
+      .select("following_id", { count: "exact" })
+      .eq("follower_id", userId)
+      .limit(0); // Limite à 0 pour ne pas récupérer de données, juste le count
 
     if (error) {
       console.error("[socialService] Error counting following:", error);
@@ -389,10 +393,12 @@ export async function getStats(userId: string): Promise<{
     const followingCount = await getFollowingCount(userId);
 
     // Compte les posts
+    // CORRECTION : Utilise select avec count au lieu de head:true pour éviter les erreurs
     const { count: postsCount, error: postsError } = await supabase
       .from("posts")
-      .select("*", { count: "exact", head: true })
-      .eq("user_id", userId);
+      .select("id", { count: "exact" })
+      .eq("user_id", userId)
+      .limit(0); // Limite à 0 pour ne pas récupérer de données, juste le count
 
     if (postsError) {
       console.error("[socialService] Error counting posts:", postsError);

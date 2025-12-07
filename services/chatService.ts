@@ -124,7 +124,8 @@ export async function getOrCreateConversation(
   targetUserId: string
 ): Promise<string> {
   try {
-    // 1. Vérifie si une conversation existe déjà
+    // CORRECTION : Vérifie directement si une conversation existe avec les deux participants
+    // Utilise une requête plus efficace avec une jointure implicite
     const { data: existingConvs, error: checkError } = await supabase
       .from("conversation_participants")
       .select("conversation_id")
@@ -139,14 +140,16 @@ export async function getOrCreateConversation(
     if (existingConvs && existingConvs.length > 0) {
       const convIds = existingConvs.map((c) => c.conversation_id);
 
+      // CORRECTION : Utilise maybeSingle() au lieu de single() pour éviter les erreurs si aucune conversation trouvée
       const { data: matchingConv, error: matchError } = await supabase
         .from("conversation_participants")
         .select("conversation_id")
         .eq("user_id", targetUserId)
         .in("conversation_id", convIds)
-        .single();
+        .maybeSingle();
 
-      if (!matchError && matchingConv) {
+      if (!matchError && matchingConv?.conversation_id) {
+        console.log("[chatService] Found existing conversation:", matchingConv.conversation_id);
         return matchingConv.conversation_id;
       }
     }
