@@ -31,15 +31,11 @@ export default function AuthGuard({ children }: AuthGuardProps) {
   const [isRedirecting, setIsRedirecting] = React.useState(false);
   const [isMounted, setIsMounted] = React.useState(false);
 
+  // IMPORTANT : Tous les hooks doivent être appelés AVANT tous les returns conditionnels
   // Pattern Client-Only strict : Ne rien rendre tant que le client n'est pas prêt
   useEffect(() => {
     setIsMounted(true);
   }, []);
-
-  // Ne rien rendre tant que le client n'est pas monté
-  if (!isMounted) {
-    return null;
-  }
 
   // Vérifie si la route actuelle est publique
   const isPublicPath = router.isReady
@@ -111,6 +107,12 @@ export default function AuthGuard({ children }: AuthGuardProps) {
       return;
     }
   }, [user, isLoading, router, isPublicPath, isMounted]);
+
+  // MAINTENANT on peut faire les returns conditionnels APRÈS tous les hooks
+  // Ne rien rendre tant que le client n'est pas monté
+  if (!isMounted) {
+    return null;
+  }
 
   // 1. Pendant le chargement initial -> Écran de chargement stable
   if (isLoading) {
