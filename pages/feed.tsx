@@ -80,6 +80,7 @@ export default function Feed() {
   }, []);
 
   // Récupère les posts depuis Supabase avec rafraîchissement automatique
+  // IMPORTANT : Ne nécessite pas d'utilisateur connecté pour voir les posts publics
   const {
     data: allPosts = [],
     isLoading: postsLoading,
@@ -87,16 +88,17 @@ export default function Feed() {
   } = useQuery({
     queryKey: ["feed-posts"],
     queryFn: () => getFeed(50),
-    enabled: !!currentUser && isMounted,
+    enabled: isMounted, // Charge même sans utilisateur connecté
     refetchInterval: 10000, // Rafraîchit toutes les 10 secondes
     refetchOnWindowFocus: true,
   });
 
   // Récupère les stories depuis Supabase avec rafraîchissement automatique
+  // IMPORTANT : Ne nécessite pas d'utilisateur connecté pour voir les stories publiques
   const { data: stories = [] } = useQuery({
     queryKey: ["feed-stories"],
     queryFn: () => getActiveStories(50),
-    enabled: !!currentUser && isMounted,
+    enabled: isMounted, // Charge même sans utilisateur connecté
     refetchInterval: 15000, // Rafraîchit toutes les 15 secondes (stories changent moins souvent)
     refetchOnWindowFocus: true,
   });
