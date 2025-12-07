@@ -3,11 +3,12 @@ import RouteChangeHandler from "@/components/common/RouteChangeHandler";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { NotificationProvider } from "@/contexts/NotificationContext";
 import { UIProvider } from "@/contexts/UIContext";
+import { cleanupLocalStorage } from "@/utils/cleanupLocalStorage";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { AppProps } from "next/app";
 import Head from "next/head";
 import { useRouter } from "next/router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Layout from "../layout";
 // IMPORTANT : Charger les styles globaux AVANT tout rendu
 import "../styles/globals.css";
@@ -44,6 +45,44 @@ export default function App({ Component, pageProps }: AppProps) {
         },
       })
   );
+
+  /**
+   * Nettoie le localStorage au montage pour éviter QuotaExceededError
+   * Et ajoute un handler global pour capturer les erreurs
+   */
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    // Nettoie une seule fois au démarrage
+    cleanupLocalStorage();
+
+    // Handler global pour capturer les QuotaExceededError
+    const handleError = (event: ErrorEvent) => {
+      if (event.error?.name === "QuotaExceededError") {
+        console.warn("[_app] QuotaExceededError detected, cleaning localStorage...");
+        cleanupLocalStorage();
+        // Empêche l'erreur de remonter
+        event.preventDefault();
+      }
+    };
+
+    // Handler pour les promesses rejetées
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      if (event.reason?.name === "QuotaExceededError") {
+        console.warn("[_app] QuotaExceededError in promise, cleaning localStorage...");
+        cleanupLocalStorage();
+        event.preventDefault();
+      }
+    };
+
+    window.addEventListener("error", handleError);
+    window.addEventListener("unhandledrejection", handleUnhandledRejection);
+
+    return () => {
+      window.removeEventListener("error", handleError);
+      window.removeEventListener("unhandledrejection", handleUnhandledRejection);
+    };
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
