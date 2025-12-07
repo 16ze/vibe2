@@ -26,6 +26,16 @@ export default function PullToRefresh({
   const startY = useRef<number>(0);
   const currentY = useRef<number>(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  // Refs pour éviter les dépendances dans useEffect
+  const isPullingRef = useRef<boolean>(false);
+  const pullDistanceRef = useRef<number>(0);
+  const isRefreshingRef = useRef<boolean>(false);
+  const onRefreshRef = useRef(onRefresh);
+
+  // Met à jour la ref quand onRefresh change
+  useEffect(() => {
+    onRefreshRef.current = onRefresh;
+  }, [onRefresh]);
 
   // Seuil pour déclencher le refresh (en pixels)
   const PULL_THRESHOLD = 80;
@@ -33,7 +43,7 @@ export default function PullToRefresh({
   const MAX_PULL_DISTANCE = 120;
 
   useEffect(() => {
-    if (disabled || isRefreshing) return;
+    if (disabled || isRefreshingRef.current) return;
 
     const container = containerRef.current;
     if (!container) return;
@@ -43,40 +53,49 @@ export default function PullToRefresh({
       if (container.scrollTop > 0) return;
 
       startY.current = e.touches[0].clientY;
+      isPullingRef.current = true;
       setIsPulling(true);
     };
 
     const handleTouchMove = (e: TouchEvent) => {
-      if (!isPulling) return;
+      if (!isPullingRef.current) return;
 
       currentY.current = e.touches[0].clientY;
       const distance = Math.max(0, currentY.current - startY.current);
 
       // Limite la distance de pull
       const limitedDistance = Math.min(distance, MAX_PULL_DISTANCE);
+      pullDistanceRef.current = limitedDistance;
       setPullDistance(limitedDistance);
     };
 
     const handleTouchEnd = async () => {
-      if (!isPulling) return;
+      if (!isPullingRef.current) return;
+
+      const currentPullDistance = pullDistanceRef.current;
 
       // Si on a tiré assez loin, déclenche le refresh
-      if (pullDistance >= PULL_THRESHOLD) {
+      if (currentPullDistance >= PULL_THRESHOLD) {
+        isRefreshingRef.current = true;
         setIsRefreshing(true);
+        pullDistanceRef.current = 0;
         setPullDistance(0);
 
         try {
-          await onRefresh();
+          await onRefreshRef.current();
         } catch (error) {
           console.error("[PullToRefresh] Error refreshing:", error);
         } finally {
+          isRefreshingRef.current = false;
           setIsRefreshing(false);
         }
       } else {
         // Sinon, revient à la position initiale
+        pullDistanceRef.current = 0;
         setPullDistance(0);
       }
 
+      isPullingRef.current = false;
       setIsPulling(false);
     };
 
@@ -89,7 +108,7 @@ export default function PullToRefresh({
       container.removeEventListener("touchmove", handleTouchMove);
       container.removeEventListener("touchend", handleTouchEnd);
     };
-  }, [isPulling, pullDistance, onRefresh, disabled, isRefreshing]);
+  }, [disabled]); // Seulement disabled comme dépendance
 
   // Calcule l'opacité et la rotation du spinner selon la distance
   const spinnerOpacity = Math.min(1, pullDistance / PULL_THRESHOLD);
