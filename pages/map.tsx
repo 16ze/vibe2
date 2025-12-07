@@ -8,7 +8,7 @@ import { formatDistanceToNow } from "date-fns";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronLeft, Eye, EyeOff } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useRouter } from "next/navigation";
+import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
 
 /**

@@ -3,7 +3,7 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { motion } from "framer-motion";
 import { ArrowRight, AtSign, ChevronLeft, Lock } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "next/router";
 import React, { useState } from "react";
 
 /**

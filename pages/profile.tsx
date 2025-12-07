@@ -18,7 +18,7 @@ import {
   MoreVertical,
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter } from "next/router";
 import { useEffect, useRef, useState } from "react";
 import UsersListModal from "@/components/profile/UsersListModal";
 import { supabase } from "@/lib/supabase";

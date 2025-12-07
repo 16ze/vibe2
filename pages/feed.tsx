@@ -16,7 +16,7 @@ import { getFollowing } from "@/services/socialService";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import { Bell, Loader2, Plus, Search } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
 
 export default function Feed() {
@@ -29,7 +29,6 @@ export default function Feed() {
   const [isComposeOpen, setIsComposeOpen] = useState(false);
   const [feedTab, setFeedTab] = useState<"foryou" | "following">("foryou");
   const queryClient = useQueryClient();
-  const searchParams = useSearchParams();
   const router = useRouter();
 
   /**
@@ -108,10 +107,11 @@ export default function Feed() {
    * Utilisé pour la navigation depuis la caméra
    */
   useEffect(() => {
-    if (!isMounted) return; // Attend que le composant soit monté
+    if (!isMounted || !router.isReady) return; // Attend que le composant soit monté et le router soit prêt
 
-    const viewStory = searchParams.get("view_story");
-    const userEmail = searchParams.get("user_email");
+    // Pages Router : utilise router.query au lieu de searchParams
+    const viewStory = router.query.view_story as string | undefined;
+    const userEmail = router.query.user_email as string | undefined;
 
     if (viewStory === "true" && userEmail) {
       // Trouve les stories de l'utilisateur spécifié
@@ -127,10 +127,10 @@ export default function Feed() {
         setViewingStories(userStories);
 
         // Nettoie l'URL après avoir ouvert la story pour éviter la réouverture au rafraîchissement
-        router.replace("/feed", { scroll: false });
+        router.replace("/feed");
       }
     }
-  }, [searchParams, stories, router, isMounted]);
+  }, [router.isReady, router.query, stories, router, isMounted]);
 
   // Récupère les likes de l'utilisateur actuel avec rafraîchissement automatique
   const { data: userLikes = [] } = useQuery({
