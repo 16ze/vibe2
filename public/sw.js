@@ -39,20 +39,44 @@ self.addEventListener('activate', (event) => {
 });
 
 // Stratégie de cache : Network First, puis Cache
+// IMPORTANT : Exclut Supabase et les requêtes non-GET du cache
 self.addEventListener('fetch', (event) => {
+  const { request } = event;
+  const url = new URL(request.url);
+
+  // CRITIQUE : Bypass complet pour Supabase (ne pas intercepter)
+  if (url.hostname.includes('supabase.co')) {
+    // Laisse passer directement sans interception
+    event.respondWith(fetch(request));
+    return;
+  }
+
+  // Bypass pour les requêtes POST, PUT, DELETE (ne peuvent pas être mises en cache)
+  if (request.method !== 'GET') {
+    event.respondWith(fetch(request));
+    return;
+  }
+
+  // Pour les autres requêtes GET (pages, assets), utilise Network First
   event.respondWith(
-    fetch(event.request)
+    fetch(request)
       .then((response) => {
-        // Clone la réponse pour la mettre en cache
-        const responseToCache = response.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseToCache);
-        });
+        // Ne met en cache que les réponses valides (200-299)
+        if (response.status >= 200 && response.status < 300) {
+          // Clone la réponse pour la mettre en cache
+          const responseToCache = response.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(request, responseToCache).catch((err) => {
+              // Ignore les erreurs de cache silencieusement
+              console.warn('[SW] Erreur lors de la mise en cache:', err);
+            });
+          });
+        }
         return response;
       })
       .catch(() => {
-        // Si le réseau échoue, essaie le cache
-        return caches.match(event.request);
+        // Si le réseau échoue, essaie le cache uniquement pour les pages
+        return caches.match(request);
       })
   );
 });
