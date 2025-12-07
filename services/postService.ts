@@ -88,11 +88,11 @@ export async function createStory(
 }
 
 /**
- * Récupère le feed des posts
+ * Récupère le feed des posts avec le nombre de likes et commentaires
  */
 export async function getFeed(limit: number = 50): Promise<any[]> {
   try {
-    const { data, error } = await supabase
+    const { data: posts, error } = await supabase
       .from("posts")
       .select(
         `
@@ -113,7 +113,45 @@ export async function getFeed(limit: number = 50): Promise<any[]> {
       throw error;
     }
 
-    return data || [];
+    if (!posts || posts.length === 0) {
+      return [];
+    }
+
+    // Pour chaque post, récupère le nombre réel de likes et commentaires depuis Supabase
+    // Utilise des requêtes GET au lieu de HEAD pour éviter les problèmes avec le service worker
+    const postsWithCounts = await Promise.all(
+      posts.map(async (post) => {
+        // Compte les likes (utilise post_id qui existe toujours dans la table)
+        const { count: likesCount, error: likesError } = await supabase
+          .from("likes")
+          .select("post_id", { count: "exact" })
+          .eq("post_id", post.id)
+          .limit(0); // Limite à 0 pour ne pas récupérer de données, juste le count
+
+        if (likesError) {
+          console.warn("[postService] Error counting likes for post", post.id, likesError);
+        }
+
+        // Compte les commentaires
+        const { count: commentsCount, error: commentsError } = await supabase
+          .from("comments")
+          .select("post_id", { count: "exact" })
+          .eq("post_id", post.id)
+          .limit(0); // Limite à 0 pour ne pas récupérer de données, juste le count
+
+        if (commentsError) {
+          console.warn("[postService] Error counting comments for post", post.id, commentsError);
+        }
+
+        return {
+          ...post,
+          likes_count: likesCount || 0,
+          comments_count: commentsCount || 0,
+        };
+      })
+    );
+
+    return postsWithCounts;
   } catch (error) {
     console.error("[postService] Error in getFeed:", error);
     return [];
@@ -166,19 +204,20 @@ export async function toggleLike(
   userId: string
 ): Promise<{ isLiked: boolean; likesCount: number }> {
   try {
-    // 1. Vérifie si le like existe déjà (select count)
-    const { count, error: checkError } = await supabase
+    // 1. Vérifie si le like existe déjà (utilise post_id et user_id car la table n'a peut-être pas de colonne id)
+    const { data: existingLike, error: checkError } = await supabase
       .from("likes")
-      .select("id", { count: "exact", head: true })
+      .select("post_id, user_id")
       .eq("post_id", postId)
-      .eq("user_id", userId);
+      .eq("user_id", userId)
+      .maybeSingle();
 
     if (checkError) {
       console.error("[postService] Error checking like:", checkError);
       throw checkError;
     }
 
-    const likeExists = (count || 0) > 0;
+    const likeExists = !!existingLike;
 
     if (likeExists) {
       // 2. Unlike : Supprime le like
@@ -196,8 +235,9 @@ export async function toggleLike(
       // 3. Récupère le nouveau nombre de likes
       const { count, error: countError } = await supabase
         .from("likes")
-        .select("id", { count: "exact", head: true })
-        .eq("post_id", postId);
+        .select("post_id", { count: "exact" })
+        .eq("post_id", postId)
+        .limit(0); // Limite à 0 pour ne pas récupérer de données, juste le count
 
       if (countError) {
         console.error("[postService] Error counting likes:", countError);
@@ -247,8 +287,9 @@ export async function toggleLike(
       // 5. Récupère le nouveau nombre de likes
       const { count, error: countError } = await supabase
         .from("likes")
-        .select("id", { count: "exact", head: true })
-        .eq("post_id", postId);
+        .select("post_id", { count: "exact" })
+        .eq("post_id", postId)
+        .limit(0); // Limite à 0 pour ne pas récupérer de données, juste le count
 
       if (countError) {
         console.error("[postService] Error counting likes:", countError);
@@ -296,6 +337,79 @@ export async function getComments(postId: string): Promise<any[]> {
   } catch (error) {
     console.error("[postService] Error in getComments:", error);
     return [];
+  }
+}
+
+/**
+ * Supprime un post et son média associé
+ * @param postId - ID du post à supprimer
+ * @param userId - ID de l'utilisateur (pour vérifier que c'est le propriétaire)
+ */
+export async function deletePost(
+  postId: string,
+  userId: string
+): Promise<void> {
+  try {
+    // 1. Vérifie que le post appartient à l'utilisateur
+    const { data: post, error: fetchError } = await supabase
+      .from("posts")
+      .select("user_id, media_url, type")
+      .eq("id", postId)
+      .single();
+
+    if (fetchError || !post) {
+      console.error("[postService] Error fetching post:", fetchError);
+      throw new Error("Post introuvable");
+    }
+
+    if (post.user_id !== userId) {
+      throw new Error("Vous n'êtes pas autorisé à supprimer ce post");
+    }
+
+    // 2. Supprime le média de Supabase Storage si présent
+    if (post.media_url) {
+      try {
+        // Extrait le chemin du fichier depuis l'URL
+        const url = new URL(post.media_url);
+        const pathParts = url.pathname.split("/");
+        const bucket = pathParts[1]; // "posts" ou "stories"
+        const filePath = pathParts.slice(2).join("/"); // Le reste du chemin
+
+        if (bucket && filePath) {
+          const { deleteMedia } = await import("@/services/mediaService");
+          await deleteMedia(bucket as "posts" | "stories", filePath);
+        }
+      } catch (mediaError) {
+        console.warn("[postService] Error deleting media (continuing anyway):", mediaError);
+        // Continue même si la suppression du média échoue
+      }
+    }
+
+    // 3. Supprime les likes associés
+    await supabase.from("likes").delete().eq("post_id", postId);
+
+    // 4. Supprime les commentaires associés
+    await supabase.from("comments").delete().eq("post_id", postId);
+
+    // 5. Supprime les notifications associées
+    await supabase.from("notifications").delete().eq("resource_id", postId);
+
+    // 6. Supprime le post
+    const { error: deleteError } = await supabase
+      .from("posts")
+      .delete()
+      .eq("id", postId)
+      .eq("user_id", userId); // Double vérification de sécurité
+
+    if (deleteError) {
+      console.error("[postService] Error deleting post:", deleteError);
+      throw deleteError;
+    }
+
+    console.log("[postService] Post deleted successfully:", postId);
+  } catch (error) {
+    console.error("[postService] Error in deletePost:", error);
+    throw error;
   }
 }
 

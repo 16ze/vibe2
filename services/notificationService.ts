@@ -65,11 +65,15 @@ export async function getNotifications(
           notif.resource_id
         ) {
           // Récupère le post associé
-          const { data: post } = await supabase
+          const { data: post, error: postError } = await supabase
             .from("posts")
             .select("id, media_url")
             .eq("id", notif.resource_id)
-            .single();
+            .maybeSingle();
+
+          if (postError) {
+            console.error("[notificationService] Error fetching post:", postError);
+          }
 
           // Pour les commentaires, récupère aussi le contenu du commentaire
           let commentContent: string | undefined;
@@ -81,14 +85,14 @@ export async function getNotifications(
               .eq("user_id", notif.actor_id)
               .order("created_at", { ascending: false })
               .limit(1)
-              .single();
+              .maybeSingle();
 
             commentContent = comment?.content;
           }
 
           return {
             ...notif,
-            posts: post ? [post] : undefined,
+            posts: post ? post : undefined, // Retourne directement l'objet post, pas un array
             commentContent,
           };
         }

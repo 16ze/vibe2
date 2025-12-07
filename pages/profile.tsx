@@ -13,20 +13,30 @@ import {
   Share2,
   Shuffle,
   X,
+  Trash2,
+  Maximize2,
+  MoreVertical,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import UsersListModal from "@/components/profile/UsersListModal";
 import { supabase } from "@/lib/supabase";
+import { deletePost } from "@/services/postService";
+import { deleteMedia } from "@/services/mediaService";
+import { useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 
 export default function Profile() {
   const { user: currentUser, updateProfile, refreshProfile } = useAuth();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("posts");
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isFollowersModalOpen, setIsFollowersModalOpen] = useState(false);
   const [isFollowingModalOpen, setIsFollowingModalOpen] = useState(false);
+  const [selectedPost, setSelectedPost] = useState<any>(null); // Post sélectionné pour agrandissement
+  const [postMenuOpen, setPostMenuOpen] = useState<string | null>(null); // ID du post pour lequel le menu est ouvert
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [editForm, setEditForm] = useState({
     full_name: "",
@@ -48,6 +58,24 @@ export default function Profile() {
       });
     }
   }, [currentUser]);
+
+  /**
+   * Ferme le menu de post quand on clique ailleurs
+   */
+  useEffect(() => {
+    const handleClickOutside = () => {
+      if (postMenuOpen) {
+        setPostMenuOpen(null);
+      }
+    };
+
+    if (postMenuOpen) {
+      document.addEventListener("click", handleClickOutside);
+      return () => {
+        document.removeEventListener("click", handleClickOutside);
+      };
+    }
+  }, [postMenuOpen]);
 
   /**
    * Récupère les statistiques du profil avec rafraîchissement automatique
@@ -107,6 +135,44 @@ export default function Profile() {
     refetchInterval: 20000, // Rafraîchit toutes les 20 secondes
     refetchOnWindowFocus: true,
   });
+
+  /**
+   * Mutation pour supprimer un post
+   */
+  const deletePostMutation = useMutation({
+    mutationFn: async (postId: string) => {
+      if (!currentUser?.id) throw new Error("User not authenticated");
+      await deletePost(postId, currentUser.id);
+    },
+    onSuccess: () => {
+      // Invalide les queries pour rafraîchir les données
+      queryClient.invalidateQueries({ queryKey: ["user-posts", currentUser?.id] });
+      queryClient.invalidateQueries({ queryKey: ["profile-stats", currentUser?.id] });
+      queryClient.invalidateQueries({ queryKey: ["feed-posts"] });
+      setPostMenuOpen(null);
+    },
+    onError: (error) => {
+      console.error("[Profile] Error deleting post:", error);
+      alert("Erreur lors de la suppression. Veuillez réessayer.");
+    },
+  });
+
+  /**
+   * Gère la suppression d'un post
+   */
+  const handleDeletePost = async (postId: string) => {
+    if (!confirm("Êtes-vous sûr de vouloir supprimer ce post ?")) {
+      return;
+    }
+    deletePostMutation.mutate(postId);
+  };
+
+  /**
+   * Gère l'agrandissement d'un post
+   */
+  const handlePostClick = (post: any) => {
+    setSelectedPost(post);
+  };
 
   /**
    * Gère le partage du profil
@@ -312,8 +378,7 @@ export default function Profile() {
           {posts.map((post: any) => (
             <motion.div
               key={post.id}
-              whileTap={{ scale: 0.98 }}
-              className="aspect-square bg-gray-100"
+              className="aspect-square bg-gray-100 relative group"
             >
               {post.media_type === "video" ? (
                 <video
@@ -328,6 +393,52 @@ export default function Profile() {
                   loading="lazy"
                 />
               )}
+              
+              {/* Overlay avec actions au survol */}
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                <div className="flex gap-3">
+                  {/* Bouton Agrandir */}
+                  <motion.button
+                    whileTap={{ scale: 0.9 }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handlePostClick(post);
+                    }}
+                    className="w-10 h-10 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center"
+                  >
+                    <Maximize2 className="w-5 h-5 text-gray-900" />
+                  </motion.button>
+                  
+                  {/* Bouton Menu (3 points) */}
+                  <motion.button
+                    whileTap={{ scale: 0.9 }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPostMenuOpen(postMenuOpen === post.id ? null : post.id);
+                    }}
+                    className="w-10 h-10 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center relative"
+                  >
+                    <MoreVertical className="w-5 h-5 text-gray-900" />
+                    
+                    {/* Menu déroulant */}
+                    {postMenuOpen === post.id && (
+                      <div className="absolute bottom-full right-0 mb-2 bg-white rounded-lg shadow-xl overflow-hidden z-50 min-w-[120px]">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeletePost(post.id);
+                          }}
+                          disabled={deletePostMutation.isPending}
+                          className="w-full px-4 py-3 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 disabled:opacity-50"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          Supprimer
+                        </button>
+                      </div>
+                    )}
+                  </motion.button>
+                </div>
+              </div>
             </motion.div>
           ))}
 
@@ -376,6 +487,52 @@ export default function Profile() {
         users={followingList}
         onUpdate={refetchStats}
       />
+
+      {/* Modal d'agrandissement d'image */}
+      <AnimatePresence>
+        {selectedPost && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-black flex items-center justify-center p-4"
+            onClick={() => setSelectedPost(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="relative max-w-4xl max-h-[90vh] w-full"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Bouton fermer */}
+              <button
+                onClick={() => setSelectedPost(null)}
+                className="absolute top-4 right-4 z-10 w-10 h-10 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/70 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+
+              {/* Image/Vidéo agrandie */}
+              {selectedPost.media_type === "video" ? (
+                <video
+                  src={selectedPost.media_url}
+                  className="w-full h-full object-contain max-h-[90vh] rounded-lg"
+                  controls
+                  autoPlay
+                />
+              ) : (
+                <img
+                  src={selectedPost.media_url}
+                  alt=""
+                  className="w-full h-full object-contain max-h-[90vh] rounded-lg"
+                />
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Modale d'édition du profil */}
       <AnimatePresence>

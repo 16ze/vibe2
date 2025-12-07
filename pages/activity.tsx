@@ -1,184 +1,62 @@
 "use client";
 
-import { vibe } from "@/api/vibeClient";
 import NotificationItem, {
-  Notification,
+  Notification as NotificationItemType,
 } from "@/components/activity/NotificationItem";
+import { useAuth } from "@/contexts/AuthContext";
+import { useNotification } from "@/contexts/NotificationContext";
+import {
+  getNotifications,
+  markAllNotificationsAsRead,
+} from "@/services/notificationService";
 import { motion } from "framer-motion";
 import { Bell, ChevronLeft } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
-// Suppression de l'import date-fns pour éviter les problèmes SSR
-// Utilisation de vérifications de date manuelles
 
 /**
- * Génère des notifications mock pour tester la page
+ * Convertit une notification Supabase en format NotificationItem
  */
-const generateMockNotifications = (
-  currentUserEmail: string
-): Notification[] => {
-  const mockUsers = [
-    {
-      name: "Lucas",
-      email: "lucas@example.com",
-      avatar: "https://i.pravatar.cc/150?u=lucas",
-    },
-    {
-      name: "Emma",
-      email: "emma@example.com",
-      avatar: "https://i.pravatar.cc/150?u=emma",
-    },
-    {
-      name: "Thomas",
-      email: "thomas@example.com",
-      avatar: "https://i.pravatar.cc/150?u=thomas",
-    },
-    {
-      name: "Sofiane",
-      email: "sofiane@example.com",
-      avatar: "https://i.pravatar.cc/150?u=sofiane",
-    },
-    {
-      name: "Léa",
-      email: "lea@example.com",
-      avatar: "https://i.pravatar.cc/150?u=lea",
-    },
-    {
-      name: "Sarah",
-      email: "sarah@example.com",
-      avatar: "https://i.pravatar.cc/150?u=sarah",
-    },
-    {
-      name: "Alex",
-      email: "alex@example.com",
-      avatar: "https://i.pravatar.cc/150?u=alex",
-    },
-    {
-      name: "Marie",
-      email: "marie@example.com",
-      avatar: "https://i.pravatar.cc/150?u=marie",
-    },
-  ];
+const formatNotification = (notif: any): NotificationItemType | null => {
+  if (!notif || !notif.profiles) return null;
 
-  const mockPosts = [
-    { id: "post-1", media_url: "https://picsum.photos/400/400?random=1" },
-    { id: "post-2", media_url: "https://picsum.photos/400/400?random=2" },
-    { id: "post-3", media_url: "https://picsum.photos/400/400?random=3" },
-  ];
+  const actor = notif.profiles;
+  // posts peut être un objet ou un array selon la structure Supabase
+  const post = Array.isArray(notif.posts) ? notif.posts[0] : notif.posts;
 
-  const notifications: Notification[] = [];
+  // Détermine le type de notification
+  let type: NotificationItemType["type"] = "like";
+  if (notif.type === "comment") {
+    type = "comment";
+  } else if (notif.type === "follow") {
+    type = "follow";
+  } else if (notif.type === "message") {
+    // Les messages ne sont pas affichés dans Activity, on les ignore
+    return null;
+  }
 
-  // Notifications d'aujourd'hui (nouvelles)
-  notifications.push(
-    {
-      id: "notif-1",
-      type: "like",
-      author_name: mockUsers[0].name,
-      author_avatar: mockUsers[0].avatar,
-      author_email: mockUsers[0].email,
-      post_id: mockPosts[0].id,
-      post_media_url: mockPosts[0].media_url,
-      created_date: new Date(Date.now() - 30 * 60 * 1000).toISOString(), // Il y a 30 min
-      isRead: false,
-    },
-    {
-      id: "notif-2",
-      type: "comment",
-      author_name: mockUsers[1].name,
-      author_avatar: mockUsers[1].avatar,
-      author_email: mockUsers[1].email,
-      content: "Trop fort !",
-      post_id: mockPosts[1].id,
-      post_media_url: mockPosts[1].media_url,
-      created_date: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // Il y a 2h
-      isRead: false,
-    },
-    {
-      id: "notif-3",
-      type: "friend_request",
-      author_name: mockUsers[2].name,
-      author_avatar: mockUsers[2].avatar,
-      author_email: mockUsers[2].email,
-      created_date: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(), // Il y a 3h
-      isRead: false,
-    },
-    {
-      id: "notif-4",
-      type: "follow",
-      author_name: mockUsers[3].name,
-      author_avatar: mockUsers[3].avatar,
-      author_email: mockUsers[3].email,
-      created_date: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(), // Il y a 5h
-      isRead: true,
-    }
-  );
-
-  // Notifications d'aujourd'hui (lues)
-  notifications.push(
-    {
-      id: "notif-5",
-      type: "like",
-      author_name: mockUsers[4].name,
-      author_avatar: mockUsers[4].avatar,
-      author_email: mockUsers[4].email,
-      post_id: mockPosts[2].id,
-      post_media_url: mockPosts[2].media_url,
-      created_date: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(), // Il y a 6h
-      isRead: true,
-    },
-    {
-      id: "notif-6",
-      type: "comment",
-      author_name: mockUsers[5].name,
-      author_avatar: mockUsers[5].avatar,
-      author_email: mockUsers[5].email,
-      content: "J'adore ça !",
-      post_id: mockPosts[0].id,
-      post_media_url: mockPosts[0].media_url,
-      created_date: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(), // Il y a 8h
-      isRead: true,
-    }
-  );
-
-  // Notifications de cette semaine
-  notifications.push(
-    {
-      id: "notif-7",
-      type: "follow",
-      author_name: mockUsers[6].name,
-      author_avatar: mockUsers[6].avatar,
-      author_email: mockUsers[6].email,
-      created_date: new Date(
-        Date.now() - 2 * 24 * 60 * 60 * 1000
-      ).toISOString(), // Il y a 2 jours
-      isRead: true,
-    },
-    {
-      id: "notif-8",
-      type: "like",
-      author_name: mockUsers[7].name,
-      author_avatar: mockUsers[7].avatar,
-      author_email: mockUsers[7].email,
-      post_id: mockPosts[1].id,
-      post_media_url: mockPosts[1].media_url,
-      created_date: new Date(
-        Date.now() - 3 * 24 * 60 * 60 * 1000
-      ).toISOString(), // Il y a 3 jours
-      isRead: true,
-    }
-  );
-
-  return notifications;
+  return {
+    id: notif.id,
+    type,
+    author_name: actor.full_name || actor.username || "Anonyme",
+    author_avatar: actor.avatar_url,
+    author_email: actor.id, // Utilise l'ID comme email pour compatibilité
+    content: notif.commentContent, // Pour les commentaires
+    post_id: notif.resource_id || post?.id,
+    post_media_url: post?.media_url,
+    created_date: notif.created_at,
+    isRead: notif.is_read || false,
+  };
 };
 
 /**
  * Groupe les notifications par date
  * Utilise des vérifications de date manuelles pour éviter les problèmes SSR
  */
-const groupNotificationsByDate = (notifications: Notification[]) => {
+const groupNotificationsByDate = (notifications: NotificationItemType[]) => {
   const groups: {
     label: string;
-    notifications: Notification[];
+    notifications: NotificationItemType[];
   }[] = [];
 
   // Vérifie que nous sommes côté client
@@ -232,9 +110,11 @@ const groupNotificationsByDate = (notifications: Notification[]) => {
  */
 export default function Activity() {
   const router = useRouter();
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const { user: currentUser } = useAuth();
+  const { markActivityAsRead } = useNotification();
+  const [notifications, setNotifications] = useState<NotificationItemType[]>([]);
   const [isMounted, setIsMounted] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   /**
    * Marque le composant comme monté côté client
@@ -245,26 +125,42 @@ export default function Activity() {
   }, []);
 
   /**
-   * Récupère l'utilisateur actuel
+   * Charge les notifications depuis Supabase
    */
-  useEffect(() => {
-    if (isMounted) {
-      vibe.auth
-        .me()
-        .then(setCurrentUser)
-        .catch(() => {});
+  const loadNotifications = async () => {
+    if (!currentUser?.id || !isMounted) return;
+
+    try {
+      setIsLoading(true);
+      const supabaseNotifications = await getNotifications(currentUser.id, 50);
+      
+      // Convertit les notifications Supabase en format NotificationItem
+      const formatted = supabaseNotifications
+        .map(formatNotification)
+        .filter((n): n is NotificationItemType => n !== null);
+      
+      setNotifications(formatted);
+    } catch (error) {
+      console.error("[Activity] Error loading notifications:", error);
+      setNotifications([]);
+    } finally {
+      setIsLoading(false);
     }
-  }, [isMounted]);
+  };
 
   /**
-   * Génère les notifications mock au chargement
+   * Charge les notifications au montage et quand l'utilisateur change
    */
   useEffect(() => {
-    if (isMounted && currentUser?.email) {
-      const mockNotifications = generateMockNotifications(currentUser.email);
-      setNotifications(mockNotifications);
+    if (isMounted && currentUser?.id) {
+      loadNotifications();
+      // Marque toutes les notifications comme lues quand on ouvre la page
+      markActivityAsRead().catch((error) => {
+        console.error("[Activity] Error marking activity as read:", error);
+      });
     }
-  }, [isMounted, currentUser]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMounted, currentUser?.id]); // markActivityAsRead est stable, pas besoin de l'ajouter aux dépendances
 
   /**
    * Groupe les notifications par date
@@ -278,15 +174,7 @@ export default function Activity() {
    */
   const unreadCount = notifications.filter((n) => !n.isRead).length;
 
-  if (!isMounted) {
-    return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="animate-pulse text-gray-400">Chargement...</div>
-      </div>
-    );
-  }
-
-  if (!currentUser) {
+  if (!isMounted || isLoading || !currentUser) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="animate-pulse text-gray-400">Chargement...</div>
@@ -342,12 +230,18 @@ export default function Activity() {
                     key={notification.id}
                     notification={notification}
                     currentUser={currentUser}
-                    onAction={() => {
-                      // Rafraîchit la liste après une action
-                      const updated = notifications.map((n) =>
-                        n.id === notification.id ? { ...n, isRead: true } : n
-                      );
-                      setNotifications(updated);
+                    onAction={async () => {
+                      // Marque la notification comme lue dans Supabase
+                      try {
+                        const { markNotificationAsRead } = await import(
+                          "@/services/notificationService"
+                        );
+                        await markNotificationAsRead(notification.id);
+                        // Rafraîchit la liste
+                        await loadNotifications();
+                      } catch (error) {
+                        console.error("[Activity] Error marking notification as read:", error);
+                      }
                     }}
                   />
                 ))}

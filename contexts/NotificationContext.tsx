@@ -1,6 +1,8 @@
 "use client";
 
 import { vibe } from "@/api/vibeClient";
+import { supabase } from "@/lib/supabase";
+import { markAllNotificationsAsRead } from "@/services/notificationService";
 import { AnimatePresence, motion } from "framer-motion";
 import { Bell, MessageCircle, X } from "lucide-react";
 import {
@@ -32,6 +34,7 @@ interface NotificationContextType {
   setUnreadMessagesCount: (count: number) => void;
   setUnreadActivityCount: (count: number) => void;
   refreshUnreadCounts: () => void;
+  markActivityAsRead: () => Promise<void>;
 }
 
 /**
@@ -143,42 +146,342 @@ export function NotificationProvider({
   }, []);
 
   /**
-   * Rafraîchit les compteurs de messages non lus
-   * depuis les conversations en localStorage
+   * Marque toutes les notifications d'activité comme lues
+   * Appelée quand l'utilisateur ouvre la page Activity
+   */
+  const markActivityAsRead = useCallback(async () => {
+    try {
+      // Récupère l'utilisateur actuel depuis Supabase Auth
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user?.id) {
+        console.warn("[NotificationContext] No user found to mark activity as read");
+        return;
+      }
+
+      // Marque toutes les notifications comme lues dans Supabase
+      await markAllNotificationsAsRead(user.id);
+
+      // Réinitialise le compteur local
+      setUnreadActivityCount(0);
+
+      console.log("[NotificationContext] All activity notifications marked as read");
+    } catch (error) {
+      console.error("[NotificationContext] Error marking activity as read:", error);
+    }
+  }, []);
+
+  /**
+   * Récupère le nombre de conversations non lues depuis Supabase
+   * Une conversation est non lue si :
+   * - L'utilisateur est participant
+   * - Le dernier message n'est pas de l'utilisateur (last_message_sender_id !== userId)
+   * - Le statut est non lu (is_last_message_read === false)
+   */
+  const fetchUnreadMessagesCount = useCallback(async (userId: string): Promise<number> => {
+    try {
+      // 1. Récupère toutes les conversations où l'utilisateur est participant
+      const { data: participantConvs, error: participantError } = await supabase
+        .from("conversation_participants")
+        .select("conversation_id")
+        .eq("user_id", userId);
+
+      if (participantError || !participantConvs || participantConvs.length === 0) {
+        return 0;
+      }
+
+      const conversationIds = participantConvs.map((p) => p.conversation_id);
+
+      // 2. Compte les conversations non lues
+      const { count, error } = await supabase
+        .from("conversations")
+        .select("id", { count: "exact", head: true })
+        .in("id", conversationIds)
+        .eq("is_last_message_read", false)
+        .neq("last_message_sender_id", userId);
+
+      if (error) {
+        console.error("[NotificationContext] Error fetching unread messages count:", error);
+        return 0;
+      }
+
+      return count || 0;
+    } catch (error) {
+      console.error("[NotificationContext] Error in fetchUnreadMessagesCount:", error);
+      return 0;
+    }
+  }, []);
+
+  /**
+   * Récupère le nombre de notifications d'activité non lues depuis Supabase
+   */
+  const fetchUnreadActivityCount = useCallback(async (userId: string): Promise<number> => {
+    try {
+      const { count, error } = await supabase
+        .from("notifications")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .eq("is_read", false);
+
+      if (error) {
+        console.error("[NotificationContext] Error fetching unread activity count:", error);
+        return 0;
+      }
+
+      return count || 0;
+    } catch (error) {
+      console.error("[NotificationContext] Error in fetchUnreadActivityCount:", error);
+      return 0;
+    }
+  }, []);
+
+  /**
+   * Rafraîchit les compteurs de messages et d'activité non lus depuis Supabase
    */
   const refreshUnreadCounts = useCallback(async () => {
     try {
-      // Récupère les conversations depuis le client
-      const conversations = await vibe.entities.Conversation.list();
+      // Récupère l'utilisateur actuel depuis Supabase Auth
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
-      // Calcule le nombre total de messages non lus
-      const totalUnread = conversations.reduce((acc: number, conv: any) => {
-        return acc + (conv.unread_count || 0);
-      }, 0);
+      if (!user?.id) {
+        // Pas d'utilisateur connecté, on réinitialise les compteurs
+        setUnreadMessagesCount(0);
+        setUnreadActivityCount(0);
+        return;
+      }
 
-      setUnreadMessagesCount(totalUnread);
+      // Récupère les compteurs depuis Supabase
+      const [messagesCount, activityCount] = await Promise.all([
+        fetchUnreadMessagesCount(user.id),
+        fetchUnreadActivityCount(user.id),
+      ]);
 
-      // Simule un compteur d'activité (à remplacer par une vraie logique plus tard)
-      // Pour l'instant, on simule 2 notifications d'activité non lues
-      const activityCount =
-        typeof window !== "undefined"
-          ? parseInt(localStorage.getItem("vibe_unread_activity") || "0", 10)
-          : 0;
-
+      setUnreadMessagesCount(messagesCount);
       setUnreadActivityCount(activityCount);
     } catch (error) {
-      console.error("Erreur lors du rafraîchissement des notifications:", error);
+      console.error("[NotificationContext] Error refreshing unread counts:", error);
     }
+  }, [fetchUnreadMessagesCount, fetchUnreadActivityCount]);
+
+  /**
+   * Demande la permission pour les notifications push du navigateur
+   */
+  const requestNotificationPermission = useCallback(async () => {
+    if (typeof window === "undefined" || !("Notification" in window)) {
+      return false;
+    }
+
+    if (Notification.permission === "granted") {
+      return true;
+    }
+
+    if (Notification.permission !== "denied") {
+      const permission = await Notification.requestPermission();
+      return permission === "granted";
+    }
+
+    return false;
   }, []);
+
+  /**
+   * Affiche une notification push du navigateur
+   */
+  const showPushNotification = useCallback(
+    (title: string, options?: NotificationOptions) => {
+      if (typeof window === "undefined" || !("Notification" in window)) {
+        return;
+      }
+
+      if (Notification.permission === "granted") {
+        try {
+          const notification = new Notification(title, {
+            icon: "/icons/icon-192.png",
+            badge: "/icons/icon-192.png",
+            tag: "vibe-notification",
+            requireInteraction: false,
+            ...options,
+          });
+
+          // Ferme automatiquement après 5 secondes
+          setTimeout(() => {
+            notification.close();
+          }, 5000);
+
+          // Gère le clic sur la notification
+          notification.onclick = () => {
+            window.focus();
+            notification.close();
+          };
+        } catch (error) {
+          console.error("[NotificationContext] Error showing push notification:", error);
+        }
+      }
+    },
+    []
+  );
 
   /**
    * Initialise les compteurs au montage et écoute les événements
    */
   useEffect(() => {
+    // Demande la permission pour les notifications push au montage
+    requestNotificationPermission();
+
     // Rafraîchit les compteurs au montage
     refreshUnreadCounts();
 
-    // Écoute les événements de nouveau message
+    // Récupère l'utilisateur pour les abonnements Realtime
+    let currentUserId: string | null = null;
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      currentUserId = user?.id || null;
+    });
+
+    // Abonnement Realtime pour les conversations (messages non lus)
+    const conversationsChannel = supabase
+      .channel("notification-conversations")
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "conversations",
+        },
+        () => {
+          // Rafraîchit le compteur si une conversation a été mise à jour
+          refreshUnreadCounts();
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+        },
+        async (payload) => {
+          const message = payload.new as any;
+
+          // Vérifie si le message est pour l'utilisateur actuel
+          if (currentUserId && message.sender_id !== currentUserId) {
+            // Récupère l'utilisateur actuel pour vérifier la participation
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user?.id) return;
+
+            // Vérifie si l'utilisateur est participant de la conversation
+            const { data: participant } = await supabase
+              .from("conversation_participants")
+              .select("user_id")
+              .eq("conversation_id", message.conversation_id)
+              .eq("user_id", user.id)
+              .maybeSingle();
+
+            if (participant) {
+              // Nouveau message reçu, rafraîchit le compteur
+              refreshUnreadCounts();
+
+              // Affiche une notification push si la page n'est pas visible ou si on n'est pas sur /conversations
+              const isOnConversationsPage =
+                typeof window !== "undefined" &&
+                window.location.pathname.startsWith("/conversations");
+
+              if (
+                document.visibilityState === "hidden" ||
+                !isOnConversationsPage
+              ) {
+                const { data: sender } = await supabase
+                  .from("profiles")
+                  .select("username, full_name")
+                  .eq("id", message.sender_id)
+                  .maybeSingle();
+
+                const senderName = sender?.full_name || sender?.username || "Quelqu'un";
+                const preview = message.content || (message.media_url ? "📷 Photo" : "Nouveau message");
+
+                showPushNotification(`${senderName}`, {
+                  body: preview,
+                  tag: `message-${message.conversation_id}`,
+                });
+              }
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    // Abonnement Realtime pour les notifications d'activité
+    const notificationsChannel = supabase
+      .channel("notification-activities")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+        },
+        async (payload) => {
+          const notification = payload.new as any;
+
+          // Vérifie si la notification est pour l'utilisateur actuel
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user?.id || notification.user_id !== user.id) return;
+
+          // Incrémente le compteur local
+          setUnreadActivityCount((prev) => prev + 1);
+
+          // Affiche un toast
+          showToast("Nouvelle notification", "activity");
+
+          // Affiche une notification push si la page n'est pas visible
+          if (document.visibilityState === "hidden") {
+            const { data: actor } = await supabase
+              .from("profiles")
+              .select("username, full_name")
+              .eq("id", notification.actor_id)
+              .maybeSingle();
+
+            const actorName = actor?.full_name || actor?.username || "Quelqu'un";
+            let body = "";
+
+            switch (notification.type) {
+              case "like":
+                body = `${actorName} a aimé votre post`;
+                break;
+              case "comment":
+                body = `${actorName} a commenté votre post`;
+                break;
+              case "follow":
+                body = `${actorName} vous suit maintenant`;
+                break;
+              default:
+                body = "Nouvelle activité";
+            }
+
+            showPushNotification("Nouvelle activité", {
+              body,
+              tag: `activity-${notification.id}`,
+            });
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "notifications",
+        },
+        () => {
+          // Rafraîchit le compteur si une notification a été mise à jour (marquée comme lue)
+          refreshUnreadCounts();
+        }
+      )
+      .subscribe();
+
+    // Écoute les événements de nouveau message (pour compatibilité)
     const handleNewMessage = (event: CustomEvent) => {
       const { senderName, preview } = event.detail || {};
       showToast(
@@ -190,7 +493,7 @@ export function NotificationProvider({
       refreshUnreadCounts();
     };
 
-    // Écoute les événements de nouvelle activité
+    // Écoute les événements de nouvelle activité (pour compatibilité)
     const handleNewActivity = (event: CustomEvent) => {
       const { message } = event.detail || {};
       showToast(message || "Nouvelle activité", "activity");
@@ -214,8 +517,10 @@ export function NotificationProvider({
       window.removeEventListener("new-activity" as any, handleNewActivity);
       window.removeEventListener("focus", handleFocus);
       clearInterval(interval);
+      supabase.removeChannel(conversationsChannel);
+      supabase.removeChannel(notificationsChannel);
     };
-  }, [refreshUnreadCounts, showToast]);
+  }, [refreshUnreadCounts, showToast, requestNotificationPermission, showPushNotification]);
 
   /**
    * Valeur mémoïsée du contexte
@@ -228,12 +533,14 @@ export function NotificationProvider({
       setUnreadMessagesCount,
       setUnreadActivityCount,
       refreshUnreadCounts,
+      markActivityAsRead,
     }),
     [
       unreadMessagesCount,
       unreadActivityCount,
       showToast,
       refreshUnreadCounts,
+      markActivityAsRead,
     ]
   );
 

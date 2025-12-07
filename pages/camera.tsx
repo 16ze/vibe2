@@ -1,11 +1,15 @@
 "use client";
 
-import { vibe } from "@/api/vibeClient";
 import FilterCarousel, { FILTERS } from "@/components/camera/FilterCarousel";
 import UserSelectorModal from "@/components/chat/UserSelectorModal";
+import { useAuth } from "@/contexts/AuthContext";
 import { useSwipeNavigation } from "@/hooks/useSwipeNavigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
+import { useRouter } from "next/router";
+import { uploadMedia } from "@/services/mediaService";
+import { createPost, createStory } from "@/services/postService";
+import { getOrCreateConversation, sendMessage } from "@/services/chatService";
 import {
   Download,
   Grid3X3,
@@ -226,7 +230,8 @@ export default function Camera() {
   const [isMounted, setIsMounted] = useState(false);
   const [captureMode, setCaptureMode] = useState<CaptureMode>("STORY");
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>("1:1");
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const { user: currentUser } = useAuth();
+  const router = useRouter();
   const [hasActiveStory, setHasActiveStory] = useState(false);
   const [isMuted, setIsMuted] = useState(true); // Par défaut, la vidéo est muette
   const [recordingStartTime, setRecordingStartTime] = useState<number | null>(
@@ -268,38 +273,27 @@ export default function Camera() {
   });
 
   /**
-   * Récupère l'utilisateur actuel et vérifie s'il a une story active
+   * Vérifie si l'utilisateur a une story active (non expirée)
    */
   useEffect(() => {
-    vibe.auth
-      .me()
-      .then((user) => {
-        setCurrentUser(user);
-      })
-      .catch(() => {});
-
-    // Vérifie si l'utilisateur a une story active (non expirée)
     const checkActiveStory = async () => {
       try {
-        const user = await vibe.auth.me();
-        if (user?.email) {
-          const stories = await vibe.entities.Story.filter(
-            { created_by: user.email },
-            "-created_date"
+        if (currentUser?.id) {
+          const { postService } = await import("@/services/postService");
+          const stories = await postService.getActiveStories(50);
+          const userStories = stories.filter(
+            (story: any) => story.user_id === currentUser.id
           );
-          const now = new Date();
-          const activeStory = stories.find((story: any) => {
-            if (!story.expires_at) return false;
-            return new Date(story.expires_at) > now;
-          });
-          setHasActiveStory(!!activeStory);
+          setHasActiveStory(userStories.length > 0);
         }
       } catch (err) {
         console.error("Error checking active story:", err);
       }
     };
-    checkActiveStory();
-  }, []);
+    if (currentUser?.id) {
+      checkActiveStory();
+    }
+  }, [currentUser]);
 
   /**
    * Marque le composant comme monté côté client
@@ -764,36 +758,17 @@ export default function Camera() {
    * @param type - Type de publication : 'story' ou 'post'
    */
   /**
-   * Convertit le média capturé en File pour la sauvegarde
-   */
-  const convertMediaToFile = async (): Promise<File> => {
-    if (!capturedMedia) throw new Error("No captured media");
-
-    if (capturedMedia.file) {
-      return capturedMedia.file;
-    }
-
-    // Convertit le data URL ou blob URL en File
-    const blob = await (await fetch(capturedMedia.url)).blob();
-    const fileExtension = capturedMedia.type === "video" ? "mp4" : "jpg";
-    const mimeType =
-      capturedMedia.type === "video" ? "video/mp4" : "image/jpeg";
-    return new File([blob], `capture.${fileExtension}`, {
-      type: mimeType,
-    });
-  };
-
-  /**
    * Gère la publication selon le mode (STORY, POST, VIBES)
-   * Sauvegarde le média dans IndexedDB et crée l'entité appropriée
+   * Upload le média vers Supabase Storage et crée l'entité appropriée
    */
   const handlePost = async () => {
-    if (!capturedMedia) return;
+    if (!capturedMedia || !currentUser?.id) {
+      alert("Vous devez être connecté pour publier.");
+      return;
+    }
     setIsSaving(true);
 
     try {
-      let fileUrl: string;
-
       // Convertit le média en File si nécessaire
       let fileToSave: File;
 
@@ -820,100 +795,60 @@ export default function Camera() {
         });
       }
 
-      // Sauvegarde le fichier dans IndexedDB via vibeClient
-      // Cela retourne une URL au format indexeddb://fileId (ou data: pour petites images)
-      console.log("[Camera] Uploading file to IndexedDB...");
-      const uploadResult = await vibe.integrations.Core.UploadFile({
-        file: fileToSave,
-      });
-      fileUrl = uploadResult.file_url;
-      console.log("[Camera] File uploaded, file_url:", fileUrl);
+      // Upload le fichier vers Supabase Storage
+      console.log("[Camera] Uploading file to Supabase Storage...");
+      const bucket = captureMode === "STORY" ? "stories" : "posts";
+      const mediaUrl = await uploadMedia(fileToSave, bucket, currentUser.id);
+      console.log("[Camera] File uploaded, media_url:", mediaUrl);
 
-      // Récupère l'utilisateur actuel
-      const user = await vibe.auth.me();
-
-      // CORRECTION BUG : Détermine le type de média dynamiquement basé sur le blob capturé
-      // Ne force pas 'photo', vérifie vraiment si c'est une vidéo
-      // Le type doit être "photo" ou "video" selon types/post.ts
-      const mediaType = capturedMedia.type.includes("video") ? "video" : "photo";
+      // Détermine le type de média pour Supabase (image ou video)
+      const mediaType: "image" | "video" = capturedMedia.type.includes("video")
+        ? "video"
+        : "image";
 
       if (captureMode === "STORY") {
         // Crée une Story (expire dans 24h)
-        await vibe.entities.Story.create({
-          media_url: fileUrl,
-          media_type: mediaType,
-          author_name: user.full_name || user.email,
-          author_avatar: user.avatar_url,
-          created_by: user.email,
-          expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-        });
+        await createStory(currentUser.id, mediaUrl, mediaType);
+        queryClient.invalidateQueries({ queryKey: ["feed-stories"] });
         queryClient.invalidateQueries({ queryKey: ["stories"] });
 
         // Redirige vers le Feed
-        if (typeof window !== "undefined") {
-          window.location.href = "/feed";
-        }
+        router.push("/feed");
       } else if (captureMode === "VIBES") {
-        // Mode VIBES : force le type vidéo et crée un Post type 'media'
+        // Mode VIBES : force le type vidéo et crée un Post
         if (capturedMedia.type !== "video") {
           alert("Le mode Vibes ne supporte que les vidéos.");
           setIsSaving(false);
           return;
         }
 
-        await vibe.entities.Post.create({
-          type: "media",
-          media_url: fileUrl,
-          media_type: "video",
-          author_name:
-            user.full_name || user.username || user.email?.split("@")[0] || "Anonyme",
-          author_avatar: user.avatar_url,
-          created_by: user.email,
-          likes_count: 0,
-          comments_count: 0,
-          created_date: new Date().toISOString(),
-          filter: selectedFilter.id,
-        });
+        await createPost(currentUser.id, mediaUrl, "video");
+        queryClient.invalidateQueries({ queryKey: ["feed-posts"] });
         queryClient.invalidateQueries({ queryKey: ["posts"] });
 
         // Redirige vers /vibes
-        if (typeof window !== "undefined") {
-          window.location.href = "/vibes";
-        }
+        router.push("/vibes");
       } else {
-        // Mode POST : crée un MediaPost avec le type correct (image ou video)
+        // Mode POST : crée un Post avec le type correct (image ou video)
         console.log(
-          "[Camera] Creating POST with media_type:",
+          "[Camera] Creating POST with type:",
           mediaType,
           "media_url:",
-          fileUrl
+          mediaUrl
         );
-        await vibe.entities.Post.create({
-          type: "media",
-          media_url: fileUrl,
-          media_type: mediaType, // Utilise le type déterminé (photo ou video)
-          author_name:
-            user.full_name || user.username || user.email?.split("@")[0] || "Anonyme",
-          author_avatar: user.avatar_url,
-          created_by: user.email,
-          likes_count: 0,
-          comments_count: 0,
-          created_date: new Date().toISOString(),
-          filter: selectedFilter.id,
-        });
+        await createPost(currentUser.id, mediaUrl, mediaType);
+        queryClient.invalidateQueries({ queryKey: ["feed-posts"] });
         queryClient.invalidateQueries({ queryKey: ["posts"] });
 
         // Redirige vers le Feed
-        if (typeof window !== "undefined") {
-          window.location.href = "/feed";
-        }
+        router.push("/feed");
       }
 
       // Réinitialise après publication
       setCapturedMedia(null);
       setMode("capture");
     } catch (err) {
-      console.error("Failed to save:", err);
+      console.error("[Camera] Failed to publish:", err);
       alert("Erreur lors de la publication. Veuillez réessayer.");
     } finally {
       setIsSaving(false);
@@ -924,64 +859,63 @@ export default function Camera() {
    * Gère l'envoi du média à un ami (style Snapchat)
    */
   const handleSendToFriend = async (selectedUser: any) => {
-    if (!capturedMedia || !currentUser) return;
+    if (!capturedMedia || !currentUser?.id) {
+      alert("Vous devez être connecté pour envoyer un média.");
+      return;
+    }
 
     try {
       setIsSaving(true);
 
       // Convertit le média en File
-      const fileToSave = await convertMediaToFile();
-
-      // Sauvegarde le fichier dans IndexedDB
-      const uploadResult = await vibe.integrations.Core.UploadFile({
-        file: fileToSave,
-      });
-      const mediaId = uploadResult.file_url; // Format: indexeddb://fileId
-
-      // Trouve ou crée la conversation avec l'utilisateur sélectionné
-      const existingConvs = await vibe.entities.Conversation.filter({
-        created_by: currentUser.email,
-      });
-
-      let conversation = existingConvs.find(
-        (conv: any) => conv.participant_email === selectedUser.email
-      );
-
-      if (!conversation) {
-        // Crée une nouvelle conversation
-        conversation = await vibe.entities.Conversation.create({
-          participant_email: selectedUser.email,
-          participant_name:
-            selectedUser.full_name ||
-            selectedUser.username ||
-            selectedUser.email,
-          participant_avatar: selectedUser.avatar_url,
-          created_by: currentUser.email,
-          last_message: "Média",
-          last_message_at: new Date().toISOString(),
-          last_message_type: "media",
-          unread_count: 0,
+      let fileToSave: File;
+      if (capturedMedia.file) {
+        fileToSave = capturedMedia.file;
+      } else if (capturedMedia.url.startsWith("data:")) {
+        const blob = await (await fetch(capturedMedia.url)).blob();
+        const fileExtension = capturedMedia.type === "video" ? "mp4" : "jpg";
+        const mimeType =
+          capturedMedia.type === "video" ? "video/mp4" : "image/jpeg";
+        fileToSave = new File([blob], `capture.${fileExtension}`, {
+          type: mimeType,
+        });
+      } else {
+        const blob = await (await fetch(capturedMedia.url)).blob();
+        const fileExtension = capturedMedia.type === "video" ? "mp4" : "jpg";
+        const mimeType =
+          capturedMedia.type === "video" ? "video/mp4" : "image/jpeg";
+        fileToSave = new File([blob], `capture.${fileExtension}`, {
+          type: mimeType,
         });
       }
 
-      // Crée le message avec le média
-      await vibe.entities.Message.create({
-        conversation_id: conversation.id,
-        sender_id: currentUser.email,
-        content: mediaId, // L'ID IndexedDB du média
-        type: "media",
-        created_date: new Date().toISOString(),
-      });
+      // Upload le fichier vers Supabase Storage
+      const mediaUrl = await uploadMedia(
+        fileToSave,
+        "messages",
+        currentUser.id
+      );
 
-      // Met à jour la conversation
-      await vibe.entities.Conversation.update(conversation.id, {
-        last_message: "Média",
-        last_message_at: new Date().toISOString(),
-        last_message_type: "media",
-        updated_at: new Date().toISOString(),
-      });
+      // Trouve ou crée la conversation avec l'utilisateur sélectionné
+      const conversationId = await getOrCreateConversation(
+        currentUser.id,
+        selectedUser.id
+      );
 
-      // Affiche un toast (simulation avec alert pour l'instant)
+      // Détermine le type de message
+      const messageType: "text" | "image" | "video" =
+        capturedMedia.type === "video" ? "video" : "image";
+
+      // Envoie le message avec le média
+      await sendMessage(
+        conversationId,
+        currentUser.id,
+        undefined, // Pas de contenu texte
+        mediaUrl,
+        messageType
+      );
+
+      // Affiche un toast
       alert("Envoyé !");
 
       // Ferme la modale et retourne à la caméra
@@ -990,10 +924,10 @@ export default function Camera() {
 
       // Invalide le cache des conversations
       queryClient.invalidateQueries({
-        queryKey: ["conversations", currentUser.email],
+        queryKey: ["conversations", currentUser.id],
       });
     } catch (err) {
-      console.error("Failed to send media:", err);
+      console.error("[Camera] Failed to send media:", err);
       alert("Erreur lors de l'envoi. Veuillez réessayer.");
     } finally {
       setIsSaving(false);

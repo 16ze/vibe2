@@ -16,7 +16,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import { Bell, Loader2, Plus, Search } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 export default function Feed() {
   const { user: currentUser } = useAuth();
@@ -27,7 +27,6 @@ export default function Feed() {
   const [activePostId, setActivePostId] = useState<string | null>(null);
   const [isComposeOpen, setIsComposeOpen] = useState(false);
   const [feedTab, setFeedTab] = useState<"foryou" | "following">("foryou");
-  const [followingIds, setFollowingIds] = useState<string[]>([]);
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -64,11 +63,11 @@ export default function Feed() {
   });
 
   // Extrait les IDs des utilisateurs suivis
-  useEffect(() => {
-    const ids = followingData
+  // Utilise useMemo pour éviter les re-renders infinis
+  const followingIds = useMemo(() => {
+    return followingData
       .map((f) => f.following_id)
       .filter((id): id is string => !!id);
-    setFollowingIds(ids);
   }, [followingData]);
 
   /**
@@ -220,13 +219,38 @@ export default function Feed() {
   const likeMutation = useMutation({
     mutationFn: async (postId: string) => {
       if (!currentUser?.id) throw new Error("User not authenticated");
-      return await toggleLike(postId, currentUser.id);
+      const result = await toggleLike(postId, currentUser.id);
+      return { postId, ...result };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      // Met à jour optimistiquement le cache des posts
+      queryClient.setQueryData(["feed-posts"], (oldData: any) => {
+        if (!oldData) return oldData;
+        return oldData.map((post: any) => {
+          if (post.id === data.postId) {
+            return {
+              ...post,
+              likes_count: data.likesCount,
+            };
+          }
+          return post;
+        });
+      });
+
+      // Invalide les queries pour rafraîchir les données
       queryClient.invalidateQueries({
         queryKey: ["user-likes", currentUser?.id],
       });
       queryClient.invalidateQueries({ queryKey: ["feed-posts"] });
+    },
+    onError: (error) => {
+      console.error("[Feed] Error toggling like:", error);
+      alert("Erreur lors du like. Veuillez réessayer.");
+      // Invalide pour forcer le rafraîchissement en cas d'erreur
+      queryClient.invalidateQueries({ queryKey: ["feed-posts"] });
+      queryClient.invalidateQueries({
+        queryKey: ["user-likes", currentUser?.id],
+      });
     },
   });
 

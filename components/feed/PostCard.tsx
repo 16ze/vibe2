@@ -11,7 +11,7 @@ import {
   Volume2,
   VolumeX,
 } from "lucide-react";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /**
  * Props du composant PostCard
@@ -34,10 +34,16 @@ export default function PostCard({
   onSave,
   isLiked = false,
 }: PostCardProps) {
+  // Utilise directement isLiked de la prop (synchronisé avec Supabase)
   const [liked, setLiked] = useState(isLiked);
   const [saved, setSaved] = useState(false);
   const [showHeart, setShowHeart] = useState(false);
   const [likesCount, setLikesCount] = useState(post.likes_count || 0);
+
+  // Synchronise l'état local avec la prop isLiked quand elle change
+  useEffect(() => {
+    setLiked(isLiked);
+  }, [isLiked]);
   const [timeAgo, setTimeAgo] = useState<string>("");
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   // CORRECTION : Gestion de l'état sonore (toujours muet au début pour contourner les restrictions navigateurs)
@@ -64,7 +70,11 @@ export default function PostCard({
    * (Optionnel mais recommandé pour une meilleure UX)
    */
   useEffect(() => {
-    if (post.media_type !== "video" || !videoRef.current || !videoContainerRef.current) {
+    if (
+      post.media_type !== "video" ||
+      !videoRef.current ||
+      !videoContainerRef.current
+    ) {
       return;
     }
 
@@ -110,12 +120,14 @@ export default function PostCard({
   };
 
   const handleLike = () => {
-    if (liked) {
-      setLikesCount((prev: number) => prev - 1);
-    } else {
-      setLikesCount((prev: number) => prev + 1);
-    }
-    setLiked(!liked);
+    // Optimistic UI : met à jour immédiatement l'état local
+    const newLiked = !liked;
+    setLiked(newLiked);
+    setLikesCount((prev: number) =>
+      newLiked ? prev + 1 : Math.max(0, prev - 1)
+    );
+
+    // Appelle la fonction parent qui va faire l'appel Supabase
     onLike?.(post.id);
   };
 
