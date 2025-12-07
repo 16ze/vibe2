@@ -3,6 +3,7 @@
 import NotificationItem, {
   Notification as NotificationItemType,
 } from "@/components/activity/NotificationItem";
+import PullToRefresh from "@/components/common/PullToRefresh";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNotification } from "@/contexts/NotificationContext";
 import {
@@ -199,9 +200,11 @@ export default function Activity() {
         </div>
       </header>
 
-      {/* Liste des notifications */}
-      {/* IMPORTANT : pb-24 pour éviter que les éléments soient cachés par la BottomNav */}
-      <div className="flex-1 overflow-y-auto scrollbar-hide pb-24">
+      {/* PullToRefresh : Enveloppe la liste des notifications */}
+      <PullToRefresh onRefresh={loadNotifications}>
+        {/* Liste des notifications */}
+        {/* IMPORTANT : pb-24 pour éviter que les éléments soient cachés par la BottomNav */}
+        <div className="flex-1 overflow-y-auto scrollbar-hide pb-24">
         {notifications.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
             <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center mb-4">
@@ -250,7 +253,8 @@ export default function Activity() {
             </div>
           ))
         )}
-      </div>
+        </div>
+      </PullToRefresh>
     </div>
   );
 }

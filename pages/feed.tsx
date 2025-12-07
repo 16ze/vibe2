@@ -6,6 +6,7 @@ import PostCard from "@/components/feed/PostCard";
 import StoriesBar from "@/components/feed/StoriesBar";
 import TextPostCard from "@/components/feed/TextPostCard";
 import StoryViewer from "@/components/story/StoryViewer";
+import PullToRefresh from "@/components/common/PullToRefresh";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNotification } from "@/contexts/NotificationContext";
 import { useSwipeNavigation } from "@/hooks/useSwipeNavigation";
@@ -79,7 +80,11 @@ export default function Feed() {
   }, []);
 
   // Récupère les posts depuis Supabase avec rafraîchissement automatique
-  const { data: allPosts = [], isLoading: postsLoading } = useQuery({
+  const {
+    data: allPosts = [],
+    isLoading: postsLoading,
+    refetch: refetchPosts,
+  } = useQuery({
     queryKey: ["feed-posts"],
     queryFn: () => getFeed(50),
     enabled: !!currentUser && isMounted,
@@ -382,7 +387,7 @@ export default function Feed() {
   }
 
   return (
-    <div className="h-[100dvh] bg-white overflow-y-auto scrollbar-hide pb-20 pb-safe">
+    <div className="h-[100dvh] bg-white pb-20 pb-safe">
       {/* Header avec onglets "Pour toi" / "Abonnements" */}
       <header className="bg-white/95 backdrop-blur-md border-b border-gray-100 sticky top-0 z-40">
         <div className="flex items-center justify-between px-4 h-14">
@@ -478,14 +483,25 @@ export default function Feed() {
         </div>
       </header>
 
-      {/* StoriesBar scrollable */}
-      <StoriesBar
-        stories={stories}
-        onStoryClick={handleStoryClick}
-        currentUserStory={currentUser}
-      />
+      {/* PullToRefresh : Enveloppe le contenu scrollable */}
+      <PullToRefresh
+        onRefresh={async () => {
+          // Rafraîchit les posts et les stories
+          await Promise.all([
+            refetchPosts(),
+            queryClient.refetchQueries({ queryKey: ["feed-stories"] }),
+            queryClient.refetchQueries({ queryKey: ["following-ids"] }),
+          ]);
+        }}
+      >
+        {/* StoriesBar scrollable */}
+        <StoriesBar
+          stories={stories}
+          onStoryClick={handleStoryClick}
+          currentUserStory={currentUser}
+        />
 
-      {/* Contenu des posts */}
+        {/* Contenu des posts */}
       {postsLoading ? (
         <div className="flex items-center justify-center py-20">
           <Loader2 className="w-8 h-8 text-gray-300 animate-spin" />
@@ -544,6 +560,7 @@ export default function Feed() {
           ))}
         </div>
       )}
+      </PullToRefresh>
 
       <AnimatePresence>
         {viewingStories && (
