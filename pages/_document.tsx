@@ -26,6 +26,10 @@ export default function Document() {
         {/* iOS Icons */}
         <link
           rel="apple-touch-icon"
+          href="/apple-touch-icon.png"
+        />
+        <link
+          rel="apple-touch-icon"
           sizes="192x192"
           href="/icons/icon-192.png"
         />
@@ -36,7 +40,9 @@ export default function Document() {
         />
 
         {/* Favicon */}
-        <link rel="icon" href="/icons/icon-192.png" />
+        <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-192.png" />
+        <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-192.png" />
 
         {/* Service Worker Registration */}
         <script src="/register-sw.js" defer></script>
