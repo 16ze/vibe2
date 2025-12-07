@@ -58,9 +58,9 @@ export default function ConversationItem({
   // LOGIQUE SNAPCHAT :
   // - Si c'est MON message (isMe) : isRead = is_last_message_read (false = il n'a pas vu = PLEIN, true = il a vu = VIDE)
   // - Si c'est SON message (!isMe) : isRead = !hasUnread (true = j'ai lu = VIDE, false = je n'ai pas lu = PLEIN)
-  const isRead = isMe 
-    ? conversation.is_last_message_read  // Si mon message : true = lu par lui (VIDE), false = non lu par lui (PLEIN)
-    : !hasUnread;                         // Si son message : true = lu par moi (VIDE), false = non lu par moi (PLEIN)
+  const isRead = isMe
+    ? conversation.is_last_message_read // Si mon message : true = lu par lui (VIDE), false = non lu par lui (PLEIN)
+    : !hasUnread; // Si son message : true = lu par moi (VIDE), false = non lu par moi (PLEIN)
 
   const colors = getMediaTypeColor(lastMessageType);
 
