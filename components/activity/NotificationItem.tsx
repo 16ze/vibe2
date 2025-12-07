@@ -1,9 +1,11 @@
 "use client";
 
 import { vibe } from "@/api/vibeClient";
+import { followUser } from "@/services/socialService";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Check, Heart, MessageSquare, UserPlus, X } from "lucide-react";
+import { useState } from "react";
 
 /**
  * Types de notifications
@@ -56,6 +58,9 @@ export default function NotificationItem({
   onAction,
 }: NotificationItemProps) {
   const queryClient = useQueryClient();
+  // État local pour le bouton "Suivre en retour" (Optimistic UI)
+  const [isFollowingBack, setIsFollowingBack] = useState(false);
+  const [isFollowingBackLoading, setIsFollowingBackLoading] = useState(false);
 
   /**
    * Mutation pour accepter une demande d'ami
@@ -233,9 +238,62 @@ export default function NotificationItem({
         {notification.type === "follow" && (
           <motion.button
             whileTap={{ scale: 0.95 }}
-            className="mt-2 px-4 py-1.5 bg-blue-500 text-white text-xs font-semibold rounded-full hover:bg-blue-600 transition-colors"
+            onClick={async () => {
+              if (!currentUser?.id || isFollowingBack || isFollowingBackLoading) return;
+
+              // IMPORTANT : Optimistic UI - Met à jour l'état local immédiatement
+              setIsFollowingBack(true);
+              setIsFollowingBackLoading(true);
+
+              try {
+                // Récupère l'ID de l'auteur depuis author_email (qui contient l'ID dans notre cas)
+                const targetId = notification.author_email;
+                
+                // Appelle socialService.followUser
+                await followUser(currentUser.id, targetId);
+
+                // Invalide les queries pour rafraîchir les données
+                queryClient.invalidateQueries({
+                  queryKey: ["following-ids", currentUser.id],
+                });
+                queryClient.invalidateQueries({
+                  queryKey: ["profile-stats", currentUser.id],
+                });
+
+                // Appelle le callback si fourni
+                onAction?.();
+              } catch (error) {
+                console.error("[NotificationItem] Error following back:", error);
+                // En cas d'erreur, revert l'état optimiste
+                setIsFollowingBack(false);
+                alert("Erreur lors de l'abonnement. Veuillez réessayer.");
+              } finally {
+                setIsFollowingBackLoading(false);
+              }
+            }}
+            disabled={isFollowingBack || isFollowingBackLoading}
+            className={`mt-2 px-4 py-1.5 text-xs font-semibold rounded-full transition-colors flex items-center gap-1.5 ${
+              isFollowingBack
+                ? "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                : "bg-blue-500 text-white hover:bg-blue-600"
+            } disabled:opacity-50 disabled:cursor-not-allowed`}
           >
-            S'abonner en retour
+            {isFollowingBackLoading ? (
+              <>
+                <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                <span>Chargement...</span>
+              </>
+            ) : isFollowingBack ? (
+              <>
+                <Check className="w-3 h-3" />
+                <span>Abonné</span>
+              </>
+            ) : (
+              <>
+                <UserPlus className="w-3 h-3" />
+                <span>S'abonner en retour</span>
+              </>
+            )}
           </motion.button>
         )}
       </div>

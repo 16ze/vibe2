@@ -139,7 +139,8 @@ export default function UsersListModal({
           </div>
 
           {/* Liste */}
-          <div className="flex-1 overflow-y-auto">
+          {/* IMPORTANT : pb-24 pour éviter que les éléments soient cachés par la BottomNav */}
+          <div className="flex-1 overflow-y-auto pb-24">
             {users.length === 0 ? (
               <div className="py-12 text-center">
                 <p className="text-gray-500">Aucun utilisateur</p>
