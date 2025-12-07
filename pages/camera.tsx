@@ -483,16 +483,17 @@ export default function Camera() {
         setIsLoading(false);
       }
     } catch (err: any) {
-      console.error("Erreur d'accès à la caméra:", err);
+      console.error("[Camera] Erreur d'accès à la caméra:", err);
       setIsLoading(false);
 
       // Messages d'erreur spécifiques selon le type d'erreur
+      // IMPORTANT MOBILE : Messages clairs pour guider l'utilisateur
       if (
         err.name === "NotAllowedError" ||
         err.name === "PermissionDeniedError"
       ) {
         setCameraError(
-          "Accès à la caméra refusé. Veuillez autoriser l'accès dans les paramètres de votre navigateur."
+          "Veuillez autoriser la caméra dans vos réglages. Allez dans les paramètres de votre navigateur et activez l'accès à la caméra pour ce site."
         );
       } else if (
         err.name === "NotFoundError" ||
@@ -504,10 +505,16 @@ export default function Camera() {
         err.name === "TrackStartError"
       ) {
         setCameraError(
-          "La caméra est déjà utilisée par une autre application."
+          "La caméra est déjà utilisée par une autre application. Fermez les autres applications qui utilisent la caméra et réessayez."
+        );
+      } else if (err.name === "OverconstrainedError") {
+        setCameraError(
+          "Les paramètres de la caméra ne sont pas supportés par votre appareil. Veuillez réessayer."
         );
       } else {
-        setCameraError("Impossible d'accéder à la caméra. Veuillez réessayer.");
+        setCameraError(
+          "Impossible d'accéder à la caméra. Veuillez vérifier vos paramètres et réessayer."
+        );
       }
     }
   };
@@ -1113,12 +1120,13 @@ export default function Camera() {
       */}
 
       {/* Camera preview - Vidéo en absolute pour couvrir tout l'écran */}
+      {/* IMPORTANT MOBILE : h-[100dvh] au lieu de h-full pour Dynamic Viewport Height */}
       <video
         ref={videoRef}
         autoPlay
         playsInline
         muted
-        className="absolute inset-0 h-full w-full object-cover z-0"
+        className="absolute inset-0 h-[100dvh] w-full object-cover z-0"
         style={selectedFilter.style}
         onLoadedMetadata={() => {
           console.log("[Camera] Video metadata loaded in JSX");
@@ -1135,7 +1143,8 @@ export default function Camera() {
       />
 
       {/* Conteneur pour tous les contrôles et overlays - z-10 pour être au-dessus de la vidéo */}
-      <div className="relative z-10 h-full w-full pointer-events-none">
+      {/* IMPORTANT MOBILE : h-[100dvh] au lieu de h-full pour Dynamic Viewport Height */}
+      <div className="relative z-10 h-[100dvh] w-full pointer-events-none">
         {/* Aspect Ratio Overlay - Masque visuel pour montrer la zone de crop */}
         {/* Ne s'affiche que si captureMode === 'POST' */}
         <AspectRatioOverlay ratio={aspectRatio} show={captureMode === "POST"} />
