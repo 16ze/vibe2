@@ -22,7 +22,7 @@ import {
   SquarePen,
   UserPlus,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 
 export default function Conversations() {
@@ -129,7 +129,11 @@ export default function Conversations() {
     last_message_type: conv.last_message_type,
     last_message_sender_id: conv.last_message_sender_id,
     is_last_message_read: conv.is_last_message_read,
-    unread_count: conv.is_last_message_read ? 0 : 1,
+    unread_count:
+      conv.is_last_message_read ||
+      conv.last_message_sender_id === currentUser?.id
+        ? 0
+        : 1,
     is_online: false,
     created_date: conv.created_at,
   }));
@@ -145,6 +149,62 @@ export default function Conversations() {
             .includes(searchQuery.toLowerCase())
         )
       : transformedConversations;
+
+  /**
+   * Détecte si une conversation_id est passée en query param
+   * et ouvre automatiquement cette conversation
+   */
+  useEffect(() => {
+    if (!currentUser?.id || !router.isReady) return;
+
+    const conversationId = router.query.conversation_id as string;
+    if (conversationId && !selectedConversation) {
+      // Récupère la conversation depuis la liste
+      const conversation = transformedConversations.find(
+        (c: any) => c.id === conversationId
+      );
+
+      if (conversation) {
+        setSelectedConversation(conversation);
+        // Nettoie l'URL
+        router.replace("/conversations", undefined, { shallow: true });
+      } else {
+        // Si la conversation n'est pas dans la liste, on la récupère depuis Supabase
+        getConversations(currentUser.id).then((conversations) => {
+          const found = conversations.find((c: any) => c.id === conversationId);
+          if (found) {
+            const transformedConv = {
+              id: found.id,
+              participant_name:
+                found.participant?.full_name ||
+                found.participant?.username ||
+                "Anonyme",
+              participant_avatar: found.participant?.avatar_url,
+              participant_email: found.participant?.id,
+              last_message: found.last_message,
+              last_message_at: found.last_message_at || found.updated_at,
+              last_message_type: found.last_message_type,
+              last_message_sender_id: found.last_message_sender_id,
+              is_last_message_read: found.is_last_message_read,
+              unread_count: found.is_last_message_read ? 0 : 1,
+              is_online: false,
+              created_date: found.created_at,
+            };
+            setSelectedConversation(transformedConv);
+            // Nettoie l'URL
+            router.replace("/conversations", undefined, { shallow: true });
+          }
+        });
+      }
+    }
+  }, [
+    router.query.conversation_id,
+    router.isReady,
+    currentUser,
+    transformedConversations,
+    selectedConversation,
+    router,
+  ]);
 
   /**
    * Gère le clic sur l'avatar (redirige vers story ou profile)
@@ -381,6 +441,7 @@ export default function Conversations() {
                 key={conversation.id}
                 conversation={conversation}
                 onClick={setSelectedConversation}
+                currentUserId={currentUser?.id}
               />
             ))}
           </div>

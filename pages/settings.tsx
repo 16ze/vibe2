@@ -17,7 +17,7 @@ import {
   User,
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 
 /**
@@ -55,16 +55,39 @@ function SettingsItem({
   onClick,
   danger,
 }: SettingsItemProps) {
+  // Handler pour gérer les clics
+  const handleClick = (e: React.MouseEvent) => {
+    if (onClick) {
+      console.log(`[SettingsItem] Click on: ${label}`);
+      onClick();
+    }
+  };
+
+  // Si c'est un switch, on utilise un div au lieu d'un button pour éviter l'imbrication
+  const Component = hasSwitch ? motion.div : motion.button;
+  const componentProps = hasSwitch
+    ? {
+        onClick: handleClick,
+        className: "cursor-pointer",
+      }
+    : {
+        onClick: handleClick,
+        whileTap: { scale: 0.98 },
+      };
+
   return (
-    <motion.button
-      whileTap={{ scale: 0.98 }}
-      onClick={onClick}
+    <Component
+      {...componentProps}
       className={`w-full flex items-center justify-between px-4 py-3.5 ${
         danger ? "text-red-500" : "text-gray-900 dark:text-white"
-      }`}
+      } ${hasSwitch ? "cursor-pointer" : ""}`}
     >
       <div className="flex items-center gap-3">
-        <span className={danger ? "text-red-500" : "text-gray-500 dark:text-gray-400"}>
+        <span
+          className={
+            danger ? "text-red-500" : "text-gray-500 dark:text-gray-400"
+          }
+        >
           {icon}
         </span>
         <span className={`font-medium ${danger ? "text-red-500" : ""}`}>
@@ -74,7 +97,9 @@ function SettingsItem({
 
       <div className="flex items-center gap-2">
         {value && (
-          <span className="text-gray-400 dark:text-gray-500 text-sm">{value}</span>
+          <span className="text-gray-400 dark:text-gray-500 text-sm">
+            {value}
+          </span>
         )}
 
         {hasChevron && (
@@ -85,11 +110,14 @@ function SettingsItem({
           <button
             onClick={(e) => {
               e.stopPropagation();
+              e.preventDefault();
               onSwitchChange?.(!switchValue);
             }}
             className={`relative w-12 h-7 rounded-full transition-colors ${
               switchValue ? "bg-indigo-600" : "bg-gray-300 dark:bg-gray-600"
             }`}
+            type="button"
+            aria-label={label}
           >
             <motion.div
               initial={false}
@@ -100,7 +128,7 @@ function SettingsItem({
           </button>
         )}
       </div>
-    </motion.button>
+    </Component>
   );
 }
 
@@ -202,8 +230,8 @@ export default function Settings() {
         try {
           localStorage.setItem(THEME_STORAGE_KEY, "dark");
         } catch (error: any) {
-          if (error.name === 'QuotaExceededError') {
-            console.error('[Settings] Quota exceeded when saving theme');
+          if (error.name === "QuotaExceededError") {
+            console.error("[Settings] Quota exceeded when saving theme");
           }
         }
       } else {
@@ -211,8 +239,8 @@ export default function Settings() {
         try {
           localStorage.setItem(THEME_STORAGE_KEY, "light");
         } catch (error: any) {
-          if (error.name === 'QuotaExceededError') {
-            console.error('[Settings] Quota exceeded when saving theme');
+          if (error.name === "QuotaExceededError") {
+            console.error("[Settings] Quota exceeded when saving theme");
           }
         }
       }
@@ -222,7 +250,10 @@ export default function Settings() {
   /**
    * Sauvegarde les préférences utilisateur dans localStorage
    */
-  const saveUserSettings = (settings: { private?: boolean; ghost?: boolean }) => {
+  const saveUserSettings = (settings: {
+    private?: boolean;
+    ghost?: boolean;
+  }) => {
     if (typeof window !== "undefined") {
       const currentSettings = localStorage.getItem(USER_SETTINGS_KEY);
       let newSettings = { private: isPrivateAccount, ghost: isGhostMode };
@@ -240,15 +271,17 @@ export default function Settings() {
       try {
         localStorage.setItem(USER_SETTINGS_KEY, JSON.stringify(newSettings));
       } catch (error: any) {
-        if (error.name === 'QuotaExceededError') {
-          console.error('[Settings] Quota exceeded when saving settings');
+        if (error.name === "QuotaExceededError") {
+          console.error("[Settings] Quota exceeded when saving settings");
         } else {
-          console.error('[Settings] Error saving settings:', error);
+          console.error("[Settings] Error saving settings:", error);
         }
       }
 
       // Émet un événement pour notifier les autres composants
-      window.dispatchEvent(new CustomEvent("user-settings-changed", { detail: newSettings }));
+      window.dispatchEvent(
+        new CustomEvent("user-settings-changed", { detail: newSettings })
+      );
     }
   };
 
@@ -293,12 +326,19 @@ export default function Settings() {
    * Gère la déconnexion
    */
   const handleLogout = async () => {
-    const confirmed = window.confirm(
-      "Êtes-vous sûr de vouloir vous déconnecter ?"
-    );
-    if (confirmed) {
-      await logout();
-      router.push("/");
+    try {
+      const confirmed = window.confirm(
+        "Êtes-vous sûr de vouloir vous déconnecter ?"
+      );
+      if (confirmed) {
+        console.log("[Settings] Logout initiated");
+        await logout();
+        // Le logout dans AuthContext fait déjà la redirection, mais on s'assure qu'elle se fait
+        console.log("[Settings] Logout completed");
+      }
+    } catch (error) {
+      console.error("[Settings] Logout error:", error);
+      alert("Une erreur est survenue lors de la déconnexion.");
     }
   };
 
@@ -383,11 +423,9 @@ export default function Settings() {
               <ChevronLeft className="w-6 h-6 text-gray-900 dark:text-white" />
             </motion.button>
           </Link>
-
           <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
             Paramètres
           </h1>
-
           <div className="w-10" /> {/* Spacer pour centrer le titre */}
         </div>
       </header>
@@ -470,10 +508,14 @@ export default function Settings() {
 
         {/* Footer avec version */}
         <div className="text-center mt-8">
-          <p className="text-xs text-gray-400 dark:text-gray-500">VIBE v1.0.0</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500">
+            VIBE v1.0.0
+          </p>
           <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
             Made with{" "}
-            <span className="text-gradient-vibe font-medium">Electric Vibe</span>
+            <span className="text-gradient-vibe font-medium">
+              Electric Vibe
+            </span>
           </p>
         </div>
       </div>

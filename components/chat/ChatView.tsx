@@ -1,6 +1,11 @@
-import { vibe } from "@/api/vibeClient";
 import ChatInput from "@/components/chat/ChatInput";
 import MessageBubble from "@/components/chat/MessageBubble";
+import { supabase } from "@/lib/supabase";
+import {
+  getMessages,
+  markMessagesAsRead,
+  sendMessage,
+} from "@/services/chatService";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
@@ -46,76 +51,98 @@ export default function ChatView({
    * Marque la conversation comme lue au montage du composant
    */
   useEffect(() => {
-    const markConversationAsRead = async () => {
-      if (!conversation?.id) return;
+    const markAsRead = async () => {
+      if (!conversation?.id || !currentUser?.id) return;
 
       try {
-        // Met à jour la conversation pour mettre unread_count à 0
-        await vibe.entities.Conversation.update(conversation.id, {
-          unread_count: 0,
-          updated_at: new Date().toISOString(),
-        });
-
-        // Invalide le cache pour rafraîchir la liste des conversations
+        await markMessagesAsRead(conversation.id, currentUser.id);
         queryClient.invalidateQueries({
-          queryKey: ["conversations", currentUser?.email],
+          queryKey: ["conversations", currentUser.id],
         });
       } catch (error) {
-        console.error("Error marking conversation as read:", error);
+        console.error("[ChatView] Error marking as read:", error);
       }
     };
 
-    markConversationAsRead();
-  }, [conversation?.id, currentUser?.email, queryClient]);
+    markAsRead();
+  }, [conversation?.id, currentUser?.id, queryClient]);
 
+  /**
+   * Récupère les messages depuis Supabase
+   */
   const { data: messages = [], isLoading } = useQuery({
     queryKey: ["messages", conversation.id],
     queryFn: async () => {
-      const msgs = await vibe.entities.Message.filter(
-        { conversation_id: conversation.id },
-        "created_date"
-      );
-      // Trie par date croissante (les plus anciens en haut)
-      return msgs.sort((a: any, b: any) => {
-        const dateA = new Date(a.created_date || 0).getTime();
-        const dateB = new Date(b.created_date || 0).getTime();
-        return dateA - dateB;
-      });
+      if (!conversation?.id) return [];
+      return await getMessages(conversation.id, 100);
     },
-    refetchInterval: 3000,
+    enabled: !!conversation?.id,
+    refetchInterval: 2000, // Rafraîchit toutes les 2 secondes
   });
 
+  /**
+   * Abonnement Realtime pour les nouveaux messages
+   */
+  useEffect(() => {
+    if (!conversation?.id) return;
+
+    const channel = supabase
+      .channel(`messages:${conversation.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+          filter: `conversation_id=eq.${conversation.id}`,
+        },
+        (payload) => {
+          console.log("[ChatView] New message received:", payload);
+          // Invalide le cache pour rafraîchir les messages
+          queryClient.invalidateQueries({
+            queryKey: ["messages", conversation.id],
+          });
+          queryClient.invalidateQueries({
+            queryKey: ["conversations", currentUser?.id],
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [conversation?.id, currentUser?.id, queryClient]);
+
+  /**
+   * Mutation pour envoyer un message
+   */
   const sendMutation = useMutation({
     mutationFn: async (messageData: any) => {
-      const newMessage = await vibe.entities.Message.create({
-        conversation_id: conversation.id,
-        sender_email: currentUser.email,
-        sender_name:
-          currentUser.full_name || currentUser.email?.split("@")[0] || "Moi",
-        media_type: "text",
-        created_date: new Date().toISOString(),
-        ...(messageData || {}),
-      });
+      if (!currentUser?.id || !conversation?.id) {
+        throw new Error("User or conversation not found");
+      }
 
-      // Met à jour la conversation avec le dernier message
-      await vibe.entities.Conversation.update(conversation.id, {
-        last_message: messageData?.content || "Nouveau message",
-        last_message_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        last_message_type: messageData?.media_type || "text", // Stocke le type pour l'icône
-      });
+      const content = messageData?.content || "";
+      const mediaUrl = messageData?.media_url;
+      const type = messageData?.type || (mediaUrl ? "image" : "text");
 
-      return newMessage;
+      return await sendMessage(
+        conversation.id,
+        currentUser.id,
+        content || undefined,
+        mediaUrl,
+        type as "text" | "image" | "video"
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ["messages", conversation.id],
       });
       queryClient.invalidateQueries({
-        queryKey: ["conversations", currentUser?.email],
+        queryKey: ["conversations", currentUser?.id],
       });
 
-      // Scroll vers le bas après un court délai pour laisser le message s'afficher
       setTimeout(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
       }, 100);
@@ -223,26 +250,31 @@ export default function ChatView({
         ) : (
           <div className="space-y-1">
             {messages.map((message, index) => {
-              const isOwn = message.sender_email === currentUser?.email;
+              const isOwn = message.sender_id === currentUser?.id;
               const prevMessage = index > 0 ? messages[index - 1] : null;
               const showAvatar =
                 !isOwn &&
                 (!prevMessage ||
-                  prevMessage.sender_email !== message.sender_email ||
-                  new Date(message.created_date).getTime() -
-                    new Date(prevMessage.created_date).getTime() >
+                  prevMessage.sender_id !== message.sender_id ||
+                  new Date(message.created_at).getTime() -
+                    new Date(prevMessage.created_at).getTime() >
                     300000); // 5 minutes
 
               return (
                 <MessageBubble
                   key={message.id}
-                  message={message}
+                  message={{
+                    ...message,
+                    sender_email: message.sender_id, // Compatibilité
+                    sender_name:
+                      currentUser?.full_name || currentUser?.username || "Moi",
+                    created_date: message.created_at,
+                    media_type: message.type,
+                  }}
                   isOwn={isOwn}
                   showAvatar={showAvatar}
                   avatar={conversation.participant_avatar}
-                  senderName={
-                    conversation.participant_name || message.sender_name
-                  }
+                  senderName={conversation.participant_name || "Anonyme"}
                 />
               );
             })}

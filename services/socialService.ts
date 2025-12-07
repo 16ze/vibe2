@@ -5,7 +5,6 @@ import { supabase } from "@/lib/supabase";
  */
 
 export interface Follower {
-  id: string;
   follower_id: string;
   following_id: string;
   created_at: string;
@@ -18,7 +17,6 @@ export interface Follower {
 }
 
 export interface Following {
-  id: string;
   follower_id: string;
   following_id: string;
   created_at: string;
@@ -37,10 +35,10 @@ export interface Following {
  */
 export async function getFollowers(userId: string): Promise<Follower[]> {
   try {
-    // Récupère les follows avec les IDs
+    // Récupère les follows (sans id car la table utilise une clé primaire composite)
     const { data: follows, error: followsError } = await supabase
       .from("follows")
-      .select("id, follower_id, following_id, created_at")
+      .select("follower_id, following_id, created_at")
       .eq("following_id", userId)
       .order("created_at", { ascending: false });
 
@@ -79,7 +77,6 @@ export async function getFollowers(userId: string): Promise<Follower[]> {
           "[socialService] Table 'profiles' may not exist or has wrong structure"
         );
         return follows.map((follow) => ({
-          id: follow.id,
           follower_id: follow.follower_id,
           following_id: follow.following_id,
           created_at: follow.created_at,
@@ -93,7 +90,6 @@ export async function getFollowers(userId: string): Promise<Follower[]> {
     const profileMap = new Map((profiles || []).map((p) => [p.id, p]));
 
     return follows.map((follow) => ({
-      id: follow.id,
       follower_id: follow.follower_id,
       following_id: follow.following_id,
       created_at: follow.created_at,
@@ -113,10 +109,10 @@ export async function getFollowers(userId: string): Promise<Follower[]> {
  */
 export async function getFollowing(userId: string): Promise<Following[]> {
   try {
-    // Récupère les follows avec les IDs
+    // Récupère les follows (sans id car la table utilise une clé primaire composite)
     const { data: follows, error: followsError } = await supabase
       .from("follows")
-      .select("id, follower_id, following_id, created_at")
+      .select("follower_id, following_id, created_at")
       .eq("follower_id", userId)
       .order("created_at", { ascending: false });
 
@@ -155,7 +151,6 @@ export async function getFollowing(userId: string): Promise<Following[]> {
           "[socialService] Table 'profiles' may not exist or has wrong structure"
         );
         return follows.map((follow) => ({
-          id: follow.id,
           follower_id: follow.follower_id,
           following_id: follow.following_id,
           created_at: follow.created_at,
@@ -169,7 +164,6 @@ export async function getFollowing(userId: string): Promise<Following[]> {
     const profileMap = new Map((profiles || []).map((p) => [p.id, p]));
 
     return follows.map((follow) => ({
-      id: follow.id,
       follower_id: follow.follower_id,
       following_id: follow.following_id,
       created_at: follow.created_at,
@@ -195,10 +189,10 @@ export async function isFollowing(
   try {
     const { data, error } = await supabase
       .from("follows")
-      .select("id")
+      .select("follower_id, following_id")
       .eq("follower_id", currentUserId)
       .eq("following_id", targetUserId)
-      .single();
+      .maybeSingle();
 
     if (error && error.code !== "PGRST116") {
       // PGRST116 = no rows returned (normal si pas de relation)
@@ -226,10 +220,10 @@ export async function followUser(
     // Vérifie si la relation existe déjà
     const { data: existing } = await supabase
       .from("follows")
-      .select("id")
+      .select("follower_id, following_id")
       .eq("follower_id", currentUserId)
       .eq("following_id", targetUserId)
-      .single();
+      .maybeSingle();
 
     if (existing) {
       console.log("[socialService] Already following this user");
@@ -532,7 +526,6 @@ export async function searchUsers(
  */
 export async function getRelationships(currentUserId: string): Promise<
   Array<{
-    id: string;
     follower_id: string;
     following_id: string;
     created_at: string;
@@ -542,12 +535,12 @@ export async function getRelationships(currentUserId: string): Promise<
     // Récupère toutes les relations où l'utilisateur est follower ou following
     const { data: sent, error: sentError } = await supabase
       .from("follows")
-      .select("id, follower_id, following_id, created_at")
+      .select("follower_id, following_id, created_at")
       .eq("follower_id", currentUserId);
 
     const { data: received, error: receivedError } = await supabase
       .from("follows")
-      .select("id, follower_id, following_id, created_at")
+      .select("follower_id, following_id, created_at")
       .eq("following_id", currentUserId);
 
     if (sentError || receivedError) {

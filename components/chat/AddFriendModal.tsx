@@ -2,6 +2,7 @@
 
 import { useUI } from "@/contexts/UIContext";
 import { supabase } from "@/lib/supabase";
+import { getOrCreateConversation } from "@/services/chatService";
 import {
   followUser,
   getRelationships,
@@ -11,7 +12,15 @@ import {
 } from "@/services/socialService";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, Search, UserPlus, X, X as XIcon } from "lucide-react";
+import {
+  Check,
+  MessageCircle,
+  Search,
+  UserPlus,
+  X,
+  X as XIcon,
+} from "lucide-react";
+import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
 
 interface AddFriendModalProps {
@@ -35,9 +44,13 @@ export default function AddFriendModal({
    * Récupère les fonctions pour masquer/afficher la BottomNav
    */
   const { hideBottomNav, showBottomNav } = useUI();
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<"explore" | "requests">("explore");
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
+  const [messageLoading, setMessageLoading] = useState<Record<string, boolean>>(
+    {}
+  );
   const queryClient = useQueryClient();
 
   /**
@@ -60,12 +73,12 @@ export default function AddFriendModal({
   }, [isOpen, hideBottomNav, showBottomNav]);
 
   /**
-   * Debounce de la recherche (500ms)
+   * Debounce de la recherche (300ms)
    */
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearchQuery(searchQuery);
-    }, 500);
+    }, 300);
 
     return () => clearTimeout(timer);
   }, [searchQuery]);
@@ -287,17 +300,40 @@ export default function AddFriendModal({
    */
   const displayedUsers = useMemo(() => {
     if (activeTab === "explore") {
-      // Affiche les résultats de recherche
-      return searchedUsers.filter((user: any) => {
-        const status = getRelationshipStatus(user.id);
-        // Affiche seulement ceux qui ne sont pas déjà amis
-        return status !== "FRIENDS";
-      });
+      // Affiche TOUS les résultats de recherche (y compris les amis)
+      return searchedUsers;
     } else {
       // Affiche les demandes reçues
       return requestUsers;
     }
   }, [activeTab, searchedUsers, requestUsers, relationships, currentUser?.id]);
+
+  /**
+   * Gère l'ouverture d'une conversation avec un ami
+   */
+  const handleMessage = async (targetUserId: string) => {
+    if (!currentUser?.id || targetUserId === currentUser.id) return;
+
+    setMessageLoading((prev) => ({ ...prev, [targetUserId]: true }));
+
+    try {
+      console.log("[AddFriendModal] Creating conversation with:", targetUserId);
+      const conversationId = await getOrCreateConversation(
+        currentUser.id,
+        targetUserId
+      );
+      console.log("[AddFriendModal] Conversation created:", conversationId);
+
+      // Redirige vers /conversations avec l'ID de la conversation
+      router.push(`/conversations?conversation_id=${conversationId}`);
+      onClose();
+    } catch (error) {
+      console.error("[AddFriendModal] Error creating conversation:", error);
+      alert("Erreur lors de la création de la conversation");
+    } finally {
+      setMessageLoading((prev) => ({ ...prev, [targetUserId]: false }));
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -454,42 +490,64 @@ export default function AddFriendModal({
 
                       {/* Actions */}
                       {activeTab === "explore" && (
-                        <motion.button
-                          whileTap={{ scale: 0.95 }}
-                          onClick={() => {
-                            if (status === "FOLLOWING") {
-                              unfollowMutation.mutate(user.id);
-                            } else {
-                              followMutation.mutate(user.id);
-                            }
-                          }}
-                          disabled={
-                            followMutation.isPending ||
-                            unfollowMutation.isPending
-                          }
-                          className={`px-4 py-2 rounded-full text-sm font-medium transition-colors flex items-center gap-2 ${
-                            status === "FOLLOWING"
-                              ? "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                              : "bg-blue-500 text-white hover:bg-blue-600"
-                          } ${
-                            followMutation.isPending ||
-                            unfollowMutation.isPending
-                              ? "opacity-50 cursor-not-allowed"
-                              : ""
-                          }`}
-                        >
-                          {status === "FOLLOWING" ? (
-                            <>
-                              <Check className="w-4 h-4" />
-                              Suivi
-                            </>
+                        <>
+                          {status === "FRIENDS" ? (
+                            // Si ami : Bouton "Message" (gris)
+                            <motion.button
+                              whileTap={{ scale: 0.95 }}
+                              onClick={() => handleMessage(user.id)}
+                              disabled={messageLoading[user.id]}
+                              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-full text-sm font-medium hover:bg-gray-300 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {messageLoading[user.id] ? (
+                                <div className="w-4 h-4 border-2 border-gray-700 border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <>
+                                  <MessageCircle className="w-4 h-4" />
+                                  Message
+                                </>
+                              )}
+                            </motion.button>
                           ) : (
-                            <>
-                              <UserPlus className="w-4 h-4" />
-                              Suivre
-                            </>
+                            // Si pas ami : Bouton "Ajouter" (bleu) ou "Suivi" (gris)
+                            <motion.button
+                              whileTap={{ scale: 0.95 }}
+                              onClick={() => {
+                                if (status === "FOLLOWING") {
+                                  unfollowMutation.mutate(user.id);
+                                } else {
+                                  followMutation.mutate(user.id);
+                                }
+                              }}
+                              disabled={
+                                followMutation.isPending ||
+                                unfollowMutation.isPending
+                              }
+                              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors flex items-center gap-2 ${
+                                status === "FOLLOWING"
+                                  ? "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                  : "bg-blue-500 text-white hover:bg-blue-600"
+                              } ${
+                                followMutation.isPending ||
+                                unfollowMutation.isPending
+                                  ? "opacity-50 cursor-not-allowed"
+                                  : ""
+                              }`}
+                            >
+                              {status === "FOLLOWING" ? (
+                                <>
+                                  <Check className="w-4 h-4" />
+                                  Suivi
+                                </>
+                              ) : (
+                                <>
+                                  <UserPlus className="w-4 h-4" />
+                                  Ajouter
+                                </>
+                              )}
+                            </motion.button>
                           )}
-                        </motion.button>
+                        </>
                       )}
 
                       {activeTab === "requests" && (

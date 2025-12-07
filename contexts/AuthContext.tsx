@@ -70,11 +70,38 @@ async function fetchProfile(
     try {
       const { data, error } = await supabase
         .from("profiles")
-        .select("username, full_name, avatar_url, bio, score, created_at")
+        .select("username, full_name, avatar_url, bio, created_at")
         .eq("id", userId)
-        .single();
+        .maybeSingle(); // Utilise maybeSingle() au lieu de single() pour éviter les erreurs si pas de résultat
 
-      if (data && !error) {
+      if (error) {
+        console.error(
+          `[AuthContext] Error fetching profile (attempt ${i + 1}/${retries}):`,
+          error.code,
+          error.message
+        );
+
+        // Si erreur 400 ou 42703, le profil n'existe probablement pas ou la structure est incorrecte
+        if (
+          error.code === "400" ||
+          error.code === "42703" ||
+          error.code === "PGRST116"
+        ) {
+          if (i === retries - 1) {
+            console.warn(
+              `[AuthContext] Profile not found after ${retries} attempts for user:`,
+              userId,
+              "Error:",
+              error.message
+            );
+            return null;
+          }
+          // Continue avec le retry
+        } else {
+          // Autre type d'erreur, on log et on continue
+          console.warn(`[AuthContext] Unexpected error, retrying...`);
+        }
+      } else if (data) {
         console.log(
           `[AuthContext] Profile found on attempt ${i + 1}/${retries}`
         );
@@ -83,9 +110,14 @@ async function fetchProfile(
           full_name: data?.full_name || "",
           avatar_url: data?.avatar_url || "",
           bio: data?.bio || "",
-          score: data?.score || 0,
+          score: 0, // La colonne score n'existe pas dans la table profiles
           created_date: data?.created_at,
         };
+      } else {
+        // Pas d'erreur mais pas de données non plus
+        console.log(
+          `[AuthContext] No profile data returned (attempt ${i + 1}/${retries})`
+        );
       }
 
       // Si c'est la dernière tentative, on retourne null
@@ -104,8 +136,13 @@ async function fetchProfile(
         }/${retries})`
       );
       await new Promise((resolve) => setTimeout(resolve, delayMs));
-    } catch (error) {
-      console.error("[AuthContext] Error fetching profile:", error);
+    } catch (error: any) {
+      console.error(
+        `[AuthContext] Exception fetching profile (attempt ${
+          i + 1
+        }/${retries}):`,
+        error
+      );
       if (i === retries - 1) {
         return null;
       }
@@ -259,12 +296,31 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const isEmail = identifier.includes("@");
 
         if (!isEmail) {
-          // C'est un pseudo -> L'email n'est pas stocké dans profiles
-          // Pour l'instant, on demande à l'utilisateur de se connecter avec son email
-          // TODO: Implémenter une fonction RPC Supabase pour récupérer l'email depuis auth.users
-          throw new Error(
-            "Veuillez vous connecter avec votre adresse email. La connexion par pseudo sera disponible prochainement."
-          );
+          // C'est un pseudo -> Récupère l'email depuis la table profiles
+          console.log("[AuthContext] Login with username:", identifier);
+
+          const { data: profile, error: profileError } = await supabase
+            .from("profiles")
+            .select("email, id")
+            .eq("username", identifier.toLowerCase())
+            .maybeSingle();
+
+          if (profileError) {
+            console.error(
+              "[AuthContext] Error fetching profile by username:",
+              profileError
+            );
+            throw new Error("Erreur lors de la recherche de l'utilisateur");
+          }
+
+          if (!profile || !profile.email) {
+            throw new Error(
+              "Utilisateur introuvable. Vérifiez votre pseudo ou utilisez votre email."
+            );
+          }
+
+          email = profile.email;
+          console.log("[AuthContext] Found email for username:", email);
         }
 
         // Connexion avec l'email

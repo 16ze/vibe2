@@ -28,57 +28,93 @@ interface AuthGuardProps {
 export default function AuthGuard({ children }: AuthGuardProps) {
   const { user, isLoading } = useAuth();
   const router = useRouter();
-  const [hasRedirected, setHasRedirected] = React.useState(false);
+  const [isRedirecting, setIsRedirecting] = React.useState(false);
+  const [isMounted, setIsMounted] = React.useState(false);
+
+  // Marque le composant comme monté (évite les problèmes d'hydratation)
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // Vérifie si la route actuelle est publique
-  const isPublicPath = PUBLIC_PATHS.includes(router.pathname);
+  const isPublicPath = router.isReady
+    ? PUBLIC_PATHS.includes(router.pathname)
+    : false;
+
+  /**
+   * Timeout de sécurité pour éviter que l'écran noir reste indéfiniment
+   */
+  useEffect(() => {
+    if (isRedirecting) {
+      const timeout = setTimeout(() => {
+        console.warn("[AuthGuard] Redirection timeout, showing content anyway");
+        setIsRedirecting(false);
+      }, 2000);
+      return () => clearTimeout(timeout);
+    }
+  }, [isRedirecting]);
 
   /**
    * Redirection intelligente :
    * 1. Si utilisateur connecté ET route publique → redirige vers /feed
    * 2. Si utilisateur non connecté ET route non publique → redirige vers /
-   * PROTECTION : Utilise hasRedirected pour éviter les boucles infinies
    */
   useEffect(() => {
-    // Ne fait rien pendant le chargement ou si on a déjà redirigé
-    if (isLoading || hasRedirected) return;
+    // Ne fait rien si le router n'est pas prêt ou pendant le chargement
+    if (!router.isReady || isLoading || !isMounted) {
+      setIsRedirecting(false);
+      return;
+    }
+
+    // Vérifie si on est déjà sur la bonne page
+    const isOnCorrectPage = (user && !isPublicPath) || (!user && isPublicPath);
+
+    if (isOnCorrectPage) {
+      setIsRedirecting(false);
+      return;
+    }
 
     // Si pas connecté et page privée -> Redirige vers Login
     if (!user && !isPublicPath) {
-      setHasRedirected(true);
-      router.push("/").catch((err) => {
-        console.error("[AuthGuard] Error redirecting to /:", err);
-        setHasRedirected(false); // Réinitialise en cas d'erreur
-      });
+      setIsRedirecting(true);
+      router
+        .push("/")
+        .then(() => {
+          setIsRedirecting(false);
+        })
+        .catch((err) => {
+          console.error("[AuthGuard] Error redirecting to /:", err);
+          setIsRedirecting(false);
+        });
       return;
     }
 
     // Si connecté et page publique -> Redirige vers Feed
     if (user && isPublicPath) {
-      setHasRedirected(true);
-      router.push("/feed").catch((err) => {
-        console.error("[AuthGuard] Error redirecting to /feed:", err);
-        setHasRedirected(false); // Réinitialise en cas d'erreur
-      });
+      setIsRedirecting(true);
+      router
+        .push("/feed")
+        .then(() => {
+          setIsRedirecting(false);
+        })
+        .catch((err) => {
+          console.error("[AuthGuard] Error redirecting to /feed:", err);
+          setIsRedirecting(false);
+        });
       return;
     }
-  }, [user, isLoading, router, isPublicPath, hasRedirected]);
+  }, [user, isLoading, router, isPublicPath, isMounted]);
 
-  // 1. Pendant le chargement initial -> Écran Noir
-  if (isLoading) {
+  // 0. Pendant le montage initial ou si le router n'est pas prêt -> Écran Noir
+  if (!isMounted || !router.isReady || isLoading) {
     return <div className="fixed inset-0 z-[9999] bg-black" />;
   }
 
-  // 2. Si connecté mais sur une page publique (Accueil/Login) -> Écran Noir en attendant la redirection
-  if (user && isPublicPath) {
+  // 2. Si on est en train de rediriger -> Écran Noir (mais avec timeout de sécurité)
+  if (isRedirecting) {
     return <div className="fixed inset-0 z-[9999] bg-black" />;
   }
 
-  // 3. Si pas connecté et sur page privée -> Écran Noir en attendant la redirection
-  if (!user && !isPublicPath) {
-    return <div className="fixed inset-0 z-[9999] bg-black" />;
-  }
-
-  // 4. Tout est bon, on affiche la page (avec isPublicRoute pour compatibilité)
+  // 3. Tout est bon, on affiche la page (avec isPublicRoute pour compatibilité)
   return <>{children({ isPublicRoute: isPublicPath })}</>;
 }

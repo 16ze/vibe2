@@ -2,8 +2,10 @@
 
 import { useAuth } from "@/contexts/AuthContext";
 import { followUser, isFollowing, unfollowUser } from "@/services/socialService";
+import { getOrCreateConversation } from "@/services/chatService";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, UserPlus, X } from "lucide-react";
+import { Check, MessageCircle, UserPlus, X } from "lucide-react";
+import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 
 interface User {
@@ -29,8 +31,10 @@ export default function UsersListModal({
   onUpdate,
 }: UsersListModalProps) {
   const { user: currentUser } = useAuth();
+  const router = useRouter();
   const [followingStatus, setFollowingStatus] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState<Record<string, boolean>>({});
+  const [messageLoading, setMessageLoading] = useState<Record<string, boolean>>({});
 
   /**
    * Vérifie le statut de suivi pour chaque utilisateur
@@ -77,6 +81,30 @@ export default function UsersListModal({
       console.error("Error toggling follow:", error);
     } finally {
       setLoading((prev) => ({ ...prev, [targetUserId]: false }));
+    }
+  };
+
+  /**
+   * Gère le démarrage d'une conversation
+   */
+  const handleMessage = async (targetUserId: string) => {
+    if (!currentUser || targetUserId === currentUser.id) return;
+
+    setMessageLoading((prev) => ({ ...prev, [targetUserId]: true }));
+
+    try {
+      console.log("[UsersListModal] Creating conversation with:", targetUserId);
+      const conversationId = await getOrCreateConversation(currentUser.id, targetUserId);
+      console.log("[UsersListModal] Conversation created:", conversationId);
+      
+      // Redirige vers /conversations avec l'ID de la conversation en query param
+      router.push(`/conversations?conversation_id=${conversationId}`);
+      onClose();
+    } catch (error) {
+      console.error("[UsersListModal] Error creating conversation:", error);
+      alert("Erreur lors de la création de la conversation");
+    } finally {
+      setMessageLoading((prev) => ({ ...prev, [targetUserId]: false }));
     }
   };
 
@@ -152,32 +180,50 @@ export default function UsersListModal({
                       </div>
                     </div>
 
-                    {/* Bouton Suivre/Abonné */}
+                    {/* Boutons d'action */}
                     {currentUser && user.id !== currentUser.id && (
-                      <motion.button
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => handleFollowToggle(user.id)}
-                        disabled={loading[user.id]}
-                        className={`ml-3 px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2 flex-shrink-0 ${
-                          followingStatus[user.id]
-                            ? "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                            : "bg-indigo-600 text-white hover:bg-indigo-700"
-                        } disabled:opacity-50 disabled:cursor-not-allowed`}
-                      >
-                        {loading[user.id] ? (
-                          <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                        ) : followingStatus[user.id] ? (
-                          <>
-                            <Check className="w-4 h-4" />
-                            Abonné
-                          </>
-                        ) : (
-                          <>
-                            <UserPlus className="w-4 h-4" />
-                            Suivre
-                          </>
-                        )}
-                      </motion.button>
+                      <div className="flex items-center gap-2 ml-3">
+                        {/* Bouton Message */}
+                        <motion.button
+                          whileTap={{ scale: 0.95 }}
+                          onClick={() => handleMessage(user.id)}
+                          disabled={messageLoading[user.id]}
+                          className="w-10 h-10 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Envoyer un message"
+                        >
+                          {messageLoading[user.id] ? (
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <MessageCircle className="w-5 h-5" />
+                          )}
+                        </motion.button>
+
+                        {/* Bouton Suivre/Abonné */}
+                        <motion.button
+                          whileTap={{ scale: 0.95 }}
+                          onClick={() => handleFollowToggle(user.id)}
+                          disabled={loading[user.id]}
+                          className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2 flex-shrink-0 ${
+                            followingStatus[user.id]
+                              ? "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                              : "bg-indigo-600 text-white hover:bg-indigo-700"
+                          } disabled:opacity-50 disabled:cursor-not-allowed`}
+                        >
+                          {loading[user.id] ? (
+                            <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                          ) : followingStatus[user.id] ? (
+                            <>
+                              <Check className="w-4 h-4" />
+                              Abonné
+                            </>
+                          ) : (
+                            <>
+                              <UserPlus className="w-4 h-4" />
+                              Suivre
+                            </>
+                          )}
+                        </motion.button>
+                      </div>
                     )}
                   </div>
                 ))}

@@ -1,10 +1,12 @@
 import { formatDistanceToNow } from "date-fns";
 import { motion } from "framer-motion";
+import { SendHorizontal, Square } from "lucide-react";
 
 interface ConversationItemProps {
   conversation: any;
   onClick?: (conversation: any) => void;
   isTyping?: boolean;
+  currentUserId?: string; // ID de l'utilisateur actuel pour déterminer isMe
 }
 
 /**
@@ -43,12 +45,37 @@ export default function ConversationItem({
   conversation,
   onClick,
   isTyping = false,
+  currentUserId,
 }: ConversationItemProps) {
   // Utilise last_message_type de la conversation si disponible, sinon 'text' par défaut
   const lastMessageType = conversation.last_message_type || "text";
   const hasUnread = conversation.unread_count > 0;
 
+  // Détermine si le dernier message est de moi
+  const isMe =
+    currentUserId && conversation.last_message_sender_id === currentUserId;
+
+  // Détermine si le message est lu
+  // Si c'est mon message (isMe), alors isRead = is_last_message_read (true = lu, false = non lu)
+  // Si ce n'est pas mon message, alors isRead = true (car on ne montre l'icône que pour mes messages)
+  const isRead = isMe ? conversation.is_last_message_read : true;
+
   const colors = getMediaTypeColor(lastMessageType);
+
+  /**
+   * Détermine la couleur de l'icône selon le type de message
+   */
+  const getColorClass = (type: string) => {
+    switch (type) {
+      case "image":
+        return "text-red-500";
+      case "video":
+        return "text-purple-500";
+      case "text":
+      default:
+        return "text-blue-500";
+    }
+  };
 
   return (
     <motion.button
@@ -95,21 +122,22 @@ export default function ConversationItem({
           </div>
         ) : (
           <div className="flex items-center gap-2 mt-0.5">
-            {/* Badge de notification (si non lu) */}
-            {hasUnread && (
-              <div
-                className={`flex-shrink-0 w-2 h-2 ${colors.bg} rounded-full`}
+            {/* Icône SendHorizontal (si c'est mon message) ou Square (si c'est le sien) */}
+            {isMe ? (
+              <SendHorizontal
+                className={`w-[18px] h-[18px] ${getColorClass(
+                  lastMessageType
+                )} ${isRead ? "" : "fill-current"}`}
+                strokeWidth={isRead ? 2 : 1.5}
+              />
+            ) : (
+              <Square
+                className={`w-[18px] h-[18px] ${getColorClass(
+                  lastMessageType
+                )} ${isRead ? "" : "fill-current"}`}
+                strokeWidth={isRead ? 2 : 1.5}
               />
             )}
-
-            {/* Icône de statut */}
-            <div
-              className={`flex-shrink-0 w-3 h-3 ${
-                hasUnread
-                  ? colors.bg
-                  : `border-2 ${colors.border} bg-transparent`
-              } rounded-sm`}
-            />
 
             {/* Temps relatif */}
             {conversation.last_message_at && (

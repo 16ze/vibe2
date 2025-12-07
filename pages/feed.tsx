@@ -52,7 +52,7 @@ export default function Feed() {
         const following = await getFollowing(currentUser.id);
         // Extrait les IDs des utilisateurs suivis
         const ids = following
-          .map((f) => f.following_id || f.id)
+          .map((f) => f.following_id)
           .filter((id): id is string => !!id);
         setFollowingIds(ids);
       } catch (error) {
@@ -190,13 +190,18 @@ export default function Feed() {
   };
 
   const handleStoryClick = (stories: any, isOwn?: boolean) => {
+    if (!stories || stories.length === 0) return;
+
     if (isOwn) {
-      // Navigate to camera to create story
+      // Si c'est ma propre story, on l'affiche quand même dans le viewer
+      console.log("[Feed] Opening own story:", stories);
+      setViewingStories(stories);
       return;
     }
-    if (stories?.length > 0) {
-      setViewingStories(stories);
-    }
+
+    // Pour les autres stories, on les affiche normalement
+    console.log("[Feed] Opening story:", stories);
+    setViewingStories(stories);
   };
 
   /**

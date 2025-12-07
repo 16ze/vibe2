@@ -1,7 +1,7 @@
 "use client";
 
-import { vibe } from "@/api/vibeClient";
 import { useUI } from "@/contexts/UIContext";
+import { getFollowing } from "@/services/socialService";
 import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import { Search, X } from "lucide-react";
@@ -28,108 +28,53 @@ export default function UserSelectorModal({
    * Récupère les fonctions pour masquer/afficher la BottomNav
    */
   const { hideBottomNav, showBottomNav } = useUI();
-  const [users, setUsers] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
 
   /**
    * Masque la BottomNav quand la modale est ouverte
    * La réaffiche quand la modale est fermée
-   * Pattern robuste avec délai de sécurité pour les animations
    */
   useEffect(() => {
     if (isOpen) {
       hideBottomNav();
     } else {
-      // Délai de sécurité pour laisser l'animation de fermeture se finir si besoin
       const timer = setTimeout(() => {
         showBottomNav();
       }, 100);
       return () => clearTimeout(timer);
     }
-
-    // Sécurité ultime au démontage
     return () => {
       showBottomNav();
     };
   }, [isOpen, hideBottomNav, showBottomNav]);
 
   /**
-   * Récupère les relations (Follow) pour déterminer les amis
+   * Récupère les utilisateurs suivis (amis) depuis Supabase
    */
-  const { data: relationships = [] } = useQuery({
-    queryKey: ["relationships", currentUser?.email],
+  const { data: following = [], isLoading } = useQuery({
+    queryKey: ["following", currentUser?.id],
     queryFn: async () => {
-      if (!currentUser?.email) return [];
+      if (!currentUser?.id) return [];
       try {
-        const sent = await vibe.entities.Follow.filter({
-          follower_email: currentUser.email,
-        });
-        const received = await vibe.entities.Follow.filter({
-          following_email: currentUser.email,
-        });
-        return [...sent, ...received];
+        return await getFollowing(currentUser.id);
       } catch (error) {
-        console.error("Error fetching relationships:", error);
+        console.error("[UserSelectorModal] Error fetching following:", error);
         return [];
       }
     },
-    enabled: isOpen && !!currentUser,
+    enabled: isOpen && !!currentUser?.id,
   });
 
   /**
-   * Récupère tous les utilisateurs disponibles et filtre les amis
+   * Transforme les following en format compatible avec l'UI
    */
-  useEffect(() => {
-    const fetchUsers = async () => {
-      if (!isOpen) return;
-
-      try {
-        setIsLoading(true);
-        // Récupère tous les utilisateurs depuis IndexedDB
-        const allUsers = (await vibe.integrations.Core.getAllUsers()) || [];
-
-        // Filtre l'utilisateur actuel
-        const otherUsers = allUsers.filter(
-          (user: any) => user.email !== currentUser?.email
-        );
-
-        /**
-         * Détermine si un utilisateur est un ami (FRIENDS)
-         * Un utilisateur est ami si les deux relations existent avec status FRIENDS
-         */
-        const isFriend = (userEmail: string): boolean => {
-          const sent = relationships.find(
-            (rel: any) =>
-              rel.follower_email === currentUser?.email &&
-              rel.following_email === userEmail &&
-              (rel.status === "FRIENDS" || rel.status === "active")
-          );
-          const received = relationships.find(
-            (rel: any) =>
-              rel.follower_email === userEmail &&
-              rel.following_email === currentUser?.email &&
-              (rel.status === "FRIENDS" || rel.status === "active")
-          );
-          // Les deux relations doivent exister pour être amis
-          return !!(sent && received);
-        };
-
-        // Filtre uniquement les amis
-        const friends = otherUsers.filter((user: any) => isFriend(user.email));
-
-        // Si aucun ami n'existe, affiche un message vide
-        setUsers(friends);
-      } catch (error) {
-        console.error("Error fetching users:", error);
-        setUsers([]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchUsers();
-  }, [isOpen, currentUser?.email, relationships]);
+  const users = following.map((f: any) => ({
+    id: f.id || f.profiles?.id,
+    email: f.profiles?.email || "",
+    full_name: f.profiles?.full_name || "",
+    username: f.profiles?.username || "",
+    avatar_url: f.profiles?.avatar_url || "",
+  }));
 
   /**
    * Filtre les utilisateurs selon la recherche
@@ -219,7 +164,7 @@ export default function UserSelectorModal({
               <div className="divide-y divide-gray-50">
                 {filteredUsers.map((user) => (
                   <motion.button
-                    key={user.email}
+                    key={user.id || user.email}
                     whileTap={{ scale: 0.98 }}
                     onClick={() => handleSelectUser(user)}
                     className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors"
