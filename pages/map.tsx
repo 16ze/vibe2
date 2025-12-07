@@ -1,7 +1,8 @@
 "use client";
 
-import { vibe } from "@/api/vibeClient";
+import { useAuth } from "@/contexts/AuthContext";
 import { useUI } from "@/contexts/UIContext";
+import { supabase } from "@/lib/supabase";
 import { useQuery } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import { AnimatePresence, motion } from "framer-motion";
@@ -41,7 +42,7 @@ interface FriendOnMap {
  */
 export default function Map() {
   const router = useRouter();
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const { user: currentUser } = useAuth(); // MIGRÉ : Utilise useAuth() au lieu de vibeClient
   const [isGhostMode, setIsGhostMode] = useState(false);
   const [selectedFriend, setSelectedFriend] = useState<FriendOnMap | null>(
     null
@@ -74,16 +75,6 @@ export default function Map() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Une seule fois au montage, les fonctions sont stables
-
-  /**
-   * Récupère l'utilisateur actuel
-   */
-  useEffect(() => {
-    vibe.auth
-      .me()
-      .then(setCurrentUser)
-      .catch(() => {});
-  }, []);
 
   /**
    * Récupère la position géographique de l'utilisateur
@@ -121,37 +112,26 @@ export default function Map() {
   }, []);
 
   /**
-   * Récupère tous les utilisateurs
+   * Récupère tous les utilisateurs depuis Supabase
+   * MIGRÉ : Utilise maintenant Supabase au lieu de vibeClient
    */
   const { data: allUsers = [] } = useQuery({
     queryKey: ["all-users-map"],
     queryFn: async () => {
       try {
-        return await vibe.integrations.Core.getAllUsers();
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("id, username, full_name, avatar_url, email")
+          .limit(100); // Limite à 100 utilisateurs pour la carte
+
+        if (error) {
+          console.error("Error fetching users:", error);
+          return [];
+        }
+
+        return data || [];
       } catch (error) {
         console.error("Error fetching users:", error);
-        return [];
-      }
-    },
-  });
-
-  /**
-   * Récupère les relations (Follow) de l'utilisateur actuel
-   */
-  const { data: relationships = [] } = useQuery({
-    queryKey: ["relationships-map", currentUser?.email],
-    queryFn: async () => {
-      if (!currentUser?.email) return [];
-      try {
-        const sent = await vibe.entities.Follow.filter({
-          follower_email: currentUser.email,
-        });
-        const received = await vibe.entities.Follow.filter({
-          following_email: currentUser.email,
-        });
-        return [...sent, ...received];
-      } catch (error) {
-        console.error("Error fetching relationships:", error);
         return [];
       }
     },
@@ -159,25 +139,41 @@ export default function Map() {
   });
 
   /**
-   * Détermine si un utilisateur est un ami (FRIENDS)
+   * Récupère les relations (Follow) de l'utilisateur actuel depuis Supabase
+   * MIGRÉ : Utilise maintenant getRelationships() au lieu de vibeClient
    */
-  const isFriend = (userEmail: string): boolean => {
-    if (!currentUser?.email || userEmail === currentUser.email) return false;
+  const { data: relationships = [] } = useQuery({
+    queryKey: ["relationships-map", currentUser?.id],
+    queryFn: async () => {
+      if (!currentUser?.id) return [];
+      try {
+        const { getRelationships } = await import("@/services/socialService");
+        return await getRelationships(currentUser.id);
+      } catch (error) {
+        console.error("Error fetching relationships:", error);
+        return [];
+      }
+    },
+    enabled: !!currentUser?.id,
+  });
 
-    const sent = relationships.find(
+  /**
+   * Détermine si un utilisateur est un ami (les deux se suivent mutuellement)
+   * MIGRÉ : Utilise maintenant les IDs au lieu des emails
+   */
+  const isFriend = (userId: string): boolean => {
+    if (!currentUser?.id || userId === currentUser.id) return false;
+
+    const isFollowing = relationships.some(
       (rel: any) =>
-        rel.follower_email === currentUser.email &&
-        rel.following_email === userEmail &&
-        (rel.status === "FRIENDS" || rel.status === "active")
+        rel.follower_id === currentUser.id && rel.following_id === userId
     );
-    const received = relationships.find(
+    const isFollowedBy = relationships.some(
       (rel: any) =>
-        rel.follower_email === userEmail &&
-        rel.following_email === currentUser.email &&
-        (rel.status === "FRIENDS" || rel.status === "active")
+        rel.follower_id === userId && rel.following_id === currentUser.id
     );
 
-    return !!(sent && received);
+    return isFollowing && isFollowedBy;
   };
 
   /**
@@ -264,9 +260,10 @@ export default function Map() {
     const centerLng = userPosition.lng;
 
     // Récupère les vrais amis (même si allUsers est vide, on peut avoir des relations)
+    // MIGRÉ : Utilise maintenant les IDs au lieu des emails
     const realFriends =
       allUsers.length > 0
-        ? allUsers.filter((user: any) => isFriend(user.email))
+        ? allUsers.filter((user: any) => isFriend(user.id))
         : [];
 
     // Si moins de 3 amis réels, génère des amis simulés
@@ -283,7 +280,7 @@ export default function Map() {
           ).toISOString();
 
           return {
-            email: friend.email,
+            email: friend.email || friend.id, // Utilise email ou ID comme fallback
             full_name: friend.full_name,
             username: friend.username,
             avatar_url: friend.avatar_url,

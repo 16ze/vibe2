@@ -1,4 +1,3 @@
-import { initializeWithMockData } from "@/api/localStorage";
 import AuthGuard from "@/components/auth/AuthGuard";
 import RouteChangeHandler from "@/components/common/RouteChangeHandler";
 import { AuthProvider } from "@/contexts/AuthContext";
@@ -8,7 +7,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { AppProps } from "next/app";
 import Head from "next/head";
 import { useRouter } from "next/router";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import Layout from "../layout";
 // IMPORTANT : Charger les styles globaux AVANT tout rendu
 import "../styles/globals.css";
@@ -45,13 +44,6 @@ export default function App({ Component, pageProps }: AppProps) {
         },
       })
   );
-
-  /**
-   * Initialise les données mock au montage de l'application
-   */
-  useEffect(() => {
-    initializeWithMockData();
-  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>

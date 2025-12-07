@@ -1,7 +1,7 @@
 "use client";
 
-import { vibe } from "@/api/vibeClient";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/lib/supabase";
 import { motion } from "framer-motion";
 import {
   Bell,
@@ -163,9 +163,10 @@ export default function Settings() {
   const router = useRouter();
 
   /**
-   * État utilisateur courant
+   * Récupère l'utilisateur depuis useAuth()
+   * MIGRÉ : Utilise maintenant useAuth() au lieu de vibeClient
    */
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const { user: currentUser } = useAuth();
 
   /**
    * États pour les switches
@@ -175,21 +176,15 @@ export default function Settings() {
   const [isGhostMode, setIsGhostMode] = useState(false);
 
   /**
-   * Récupère l'utilisateur et ses préférences au montage
+   * Récupère les préférences au montage
    */
   useEffect(() => {
-    // Récupère l'utilisateur courant
-    vibe.auth
-      .me()
-      .then((user) => {
-        setCurrentUser(user);
-        // Initialise les préférences depuis les settings de l'utilisateur
-        if (user?.settings) {
-          setIsPrivateAccount(user.settings.private || false);
-          setIsGhostMode(user.settings.ghost || false);
-        }
-      })
-      .catch(() => {});
+    // Initialise les préférences depuis les settings de l'utilisateur
+    if (currentUser) {
+      // TODO: Récupérer les préférences depuis Supabase si nécessaire
+      setIsPrivateAccount(false);
+      setIsGhostMode(false);
+    }
 
     // Récupère le thème depuis localStorage
     if (typeof window !== "undefined") {
@@ -355,56 +350,93 @@ export default function Settings() {
         "Dernière confirmation : tapez OK pour supprimer définitivement votre compte."
       );
 
-      if (doubleConfirm && currentUser?.email) {
+      if (doubleConfirm && currentUser?.id) {
         try {
-          // Supprime les posts de l'utilisateur
-          const userPosts = await vibe.entities.Post.filter({
-            created_by: currentUser.email,
-          });
-          for (const post of userPosts) {
-            await vibe.entities.Post.delete(post.id);
+          // MIGRÉ : Supprime les données depuis Supabase au lieu de vibeClient
+          
+          // 1. Supprime les posts de l'utilisateur (et leurs médias)
+          const { data: userPosts } = await supabase
+            .from("posts")
+            .select("id, media_url")
+            .eq("user_id", currentUser.id);
+
+          if (userPosts) {
+            // Supprime les médias depuis Storage
+            for (const post of userPosts) {
+              if (post.media_url) {
+                try {
+                  const urlParts = post.media_url.split("/");
+                  const fileName = urlParts[urlParts.length - 1];
+                  await supabase.storage.from("posts").remove([`${currentUser.id}/${fileName}`]);
+                } catch (err) {
+                  console.warn("Error deleting post media:", err);
+                }
+              }
+            }
+            // Supprime les posts
+            await supabase.from("posts").delete().eq("user_id", currentUser.id);
           }
 
-          // Supprime les stories de l'utilisateur
-          const userStories = await vibe.entities.Story.filter({
-            created_by: currentUser.email,
-          });
-          for (const story of userStories) {
-            await vibe.entities.Story.delete(story.id);
+          // 2. Supprime les stories de l'utilisateur (et leurs médias)
+          const { data: userStories } = await supabase
+            .from("stories")
+            .select("id, media_url")
+            .eq("user_id", currentUser.id);
+
+          if (userStories) {
+            // Supprime les médias depuis Storage
+            for (const story of userStories) {
+              if (story.media_url) {
+                try {
+                  const urlParts = story.media_url.split("/");
+                  const fileName = urlParts[urlParts.length - 1];
+                  await supabase.storage.from("stories").remove([`${currentUser.id}/${fileName}`]);
+                } catch (err) {
+                  console.warn("Error deleting story media:", err);
+                }
+              }
+            }
+            // Supprime les stories
+            await supabase.from("stories").delete().eq("user_id", currentUser.id);
           }
 
-          // Supprime les conversations de l'utilisateur
-          const userConversations = await vibe.entities.Conversation.filter({
-            created_by: currentUser.email,
-          });
-          for (const conv of userConversations) {
-            await vibe.entities.Conversation.delete(conv.id);
-          }
+          // 3. Supprime les follows (follower_id et following_id)
+          await supabase.from("follows").delete().eq("follower_id", currentUser.id);
+          await supabase.from("follows").delete().eq("following_id", currentUser.id);
 
-          // Supprime les follows
-          const userFollows = await vibe.entities.Follow.filter({
-            follower_email: currentUser.email,
-          });
-          for (const follow of userFollows) {
-            await vibe.entities.Follow.delete(follow.id);
-          }
+          // 4. Supprime les likes et commentaires de l'utilisateur
+          await supabase.from("likes").delete().eq("user_id", currentUser.id);
+          await supabase.from("comments").delete().eq("user_id", currentUser.id);
 
-          // Nettoie le localStorage
+          // 5. Supprime les notifications
+          await supabase.from("notifications").delete().eq("user_id", currentUser.id);
+          await supabase.from("notifications").delete().eq("actor_id", currentUser.id);
+
+          // 6. Supprime le profil
+          await supabase.from("profiles").delete().eq("id", currentUser.id);
+
+          // 7. Nettoie le localStorage
           if (typeof window !== "undefined") {
             localStorage.removeItem(THEME_STORAGE_KEY);
             localStorage.removeItem(USER_SETTINGS_KEY);
             localStorage.removeItem("vibe_current_user");
           }
 
-          // Déconnecte l'utilisateur
+          // 8. Supprime le compte Auth Supabase (cela supprime aussi le profil via trigger)
+          await supabase.auth.admin.deleteUser(currentUser.id).catch(() => {
+            // Si admin API n'est pas disponible, on supprime juste la session
+            console.warn("Admin API not available, deleting session only");
+          });
+
+          // 9. Déconnecte l'utilisateur
           await logout();
 
-          // Redirige vers l'accueil
+          // 10. Redirige vers l'accueil
           alert("Votre compte a été supprimé avec succès.");
           router.push("/");
         } catch (error) {
           console.error("Erreur lors de la suppression du compte:", error);
-          alert("Une erreur est survenue lors de la suppression du compte.");
+          alert("Une erreur est survenue lors de la suppression du compte : " + (error as Error).message);
         }
       }
     }

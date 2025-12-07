@@ -1,7 +1,6 @@
 "use client";
 
-import { vibe } from "@/api/vibeClient";
-import { followUser } from "@/services/socialService";
+import { followUser, removeFollower } from "@/services/socialService";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Check, Heart, MessageSquare, UserPlus, X } from "lucide-react";
@@ -64,43 +63,23 @@ export default function NotificationItem({
 
   /**
    * Mutation pour accepter une demande d'ami
+   * MIGRÉ : Utilise maintenant followUser() de socialService au lieu de vibeClient
    */
   const acceptRequestMutation = useMutation({
-    mutationFn: async (userEmail: string) => {
-      // Récupère les relations existantes
-      const sent = await vibe.entities.Follow.filter({
-        follower_email: currentUser.email,
-        following_email: userEmail,
-      });
-      const received = await vibe.entities.Follow.filter({
-        follower_email: userEmail,
-        following_email: currentUser.email,
-      });
-
-      if (received.length > 0) {
-        // Met à jour la relation reçue
-        await vibe.entities.Follow.update(received[0].id, {
-          status: "FRIENDS",
-        });
-
-        // Crée ou met à jour la relation inverse
-        if (sent.length > 0) {
-          await vibe.entities.Follow.update(sent[0].id, {
-            status: "FRIENDS",
-          });
-        } else {
-          await vibe.entities.Follow.create({
-            follower_email: currentUser.email,
-            following_email: userEmail,
-            status: "FRIENDS",
-            created_date: new Date().toISOString(),
-          });
-        }
-      }
+    mutationFn: async (targetUserId: string) => {
+      if (!currentUser?.id) throw new Error("User not authenticated");
+      // Accepter = suivre en retour (crée la relation mutuelle)
+      await followUser(currentUser.id, targetUserId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["relationships", currentUser.email],
+        queryKey: ["relationships", currentUser?.id],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["followers", currentUser?.id],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["following", currentUser?.id],
       });
       onAction?.();
     },
@@ -108,21 +87,20 @@ export default function NotificationItem({
 
   /**
    * Mutation pour refuser une demande d'ami
+   * MIGRÉ : Utilise maintenant removeFollower() de socialService au lieu de vibeClient
    */
   const rejectRequestMutation = useMutation({
-    mutationFn: async (userEmail: string) => {
-      const received = await vibe.entities.Follow.filter({
-        follower_email: userEmail,
-        following_email: currentUser.email,
-      });
-
-      if (received.length > 0) {
-        await vibe.entities.Follow.delete(received[0].id);
-      }
+      mutationFn: async (targetUserId: string) => {
+      if (!currentUser?.id) throw new Error("User not authenticated");
+      // Refuser = supprimer le follower (removeFollower)
+      await removeFollower(currentUser.id, targetUserId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["relationships", currentUser.email],
+        queryKey: ["relationships", currentUser?.id],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["followers", currentUser?.id],
       });
       onAction?.();
     },
@@ -212,7 +190,7 @@ export default function NotificationItem({
             <motion.button
               whileTap={{ scale: 0.95 }}
               onClick={() =>
-                acceptRequestMutation.mutate(notification.author_email)
+                acceptRequestMutation.mutate(notification.author_email) // author_email contient l'ID
               }
               disabled={acceptRequestMutation.isPending}
               className="flex-1 px-3 py-1.5 bg-blue-500 text-white text-xs font-semibold rounded-full hover:bg-blue-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
@@ -223,7 +201,7 @@ export default function NotificationItem({
             <motion.button
               whileTap={{ scale: 0.95 }}
               onClick={() =>
-                rejectRequestMutation.mutate(notification.author_email)
+                rejectRequestMutation.mutate(notification.author_email) // author_email contient l'ID
               }
               disabled={rejectRequestMutation.isPending}
               className="flex-1 px-3 py-1.5 bg-gray-200 text-gray-700 text-xs font-semibold rounded-full hover:bg-gray-300 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"

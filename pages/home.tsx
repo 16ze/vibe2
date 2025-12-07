@@ -1,6 +1,6 @@
 "use client";
 
-import { vibe } from "@/api/vibeClient";
+import { useAuth } from "@/contexts/AuthContext";
 import { AnimatePresence, motion } from "framer-motion";
 import React, { useEffect, useRef, useState } from "react";
 import Camera from "./camera";
@@ -12,24 +12,15 @@ import Vibes from "./vibes";
 /**
  * Page principale de l'application
  * Gère la navigation entre les différents écrans
+ * MIGRÉ : Utilise maintenant useAuth() au lieu de vibeClient
  */
 export default function Home() {
+  const { user: currentUser } = useAuth();
   const [activeIndex, setActiveIndex] = useState(0); // Commence sur Feed
-  const [currentUser, setCurrentUser] = useState<any>(null);
   const [hideBottomNav, setHideBottomNav] = useState(false);
   const containerRef = useRef(null);
   const startX = useRef(0);
   const currentX = useRef(0);
-
-  /**
-   * Récupère l'utilisateur actuel au chargement
-   */
-  useEffect(() => {
-    vibe.auth
-      .me()
-      .then(setCurrentUser)
-      .catch(() => {});
-  }, []);
 
   /**
    * Écoute les événements pour masquer/afficher la BottomNav
