@@ -77,9 +77,22 @@ async function fetchProfile(
       if (error) {
         console.error(
           `[AuthContext] Error fetching profile (attempt ${i + 1}/${retries}):`,
-          error.code,
-          error.message
+          error.code || 'NO_CODE',
+          error.message || 'Unknown error',
+          error
         );
+
+        // Si erreur réseau (TypeError: Failed to fetch), c'est probablement le Service Worker
+        if (error.message && error.message.includes('Failed to fetch')) {
+          console.error(
+            '[AuthContext] Network error - Service Worker may be blocking Supabase requests'
+          );
+          // Continue avec le retry, mais avec un délai plus long
+          if (i < retries - 1) {
+            await new Promise((resolve) => setTimeout(resolve, delayMs * 2));
+            continue;
+          }
+        }
 
         // Si erreur 400 ou 42703, le profil n'existe probablement pas ou la structure est incorrecte
         if (

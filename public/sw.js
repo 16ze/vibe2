@@ -45,14 +45,26 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
 
   // CRITIQUE : Bypass complet pour Supabase (ne pas intercepter)
-  if (url.hostname.includes('supabase.co')) {
-    // Laisse passer directement sans interception
-    event.respondWith(fetch(request));
+  // Vérifie aussi les sous-domaines et les chemins API
+  if (
+    url.hostname.includes('supabase.co') ||
+    url.hostname.includes('supabase.io') ||
+    url.pathname.includes('/rest/v1/') ||
+    url.pathname.includes('/auth/v1/') ||
+    url.pathname.includes('/storage/v1/') ||
+    url.pathname.includes('/realtime/v1/')
+  ) {
+    // Laisse passer directement sans interception - CRITIQUE pour Supabase
+    event.respondWith(fetch(request).catch((err) => {
+      console.error('[SW] Supabase fetch error (bypassed):', err);
+      // Retourne une erreur réseau plutôt qu'un cache
+      throw err;
+    }));
     return;
   }
 
-  // Bypass pour les requêtes POST, PUT, DELETE (ne peuvent pas être mises en cache)
-  if (request.method !== 'GET') {
+  // Bypass pour les requêtes POST, PUT, DELETE, PATCH (ne peuvent pas être mises en cache)
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
     event.respondWith(fetch(request));
     return;
   }
@@ -61,8 +73,8 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     fetch(request)
       .then((response) => {
-        // Ne met en cache que les réponses valides (200-299)
-        if (response.status >= 200 && response.status < 300) {
+        // Ne met en cache que les réponses valides (200-299) et clonables
+        if (response.status >= 200 && response.status < 300 && response.type === 'basic') {
           // Clone la réponse pour la mettre en cache
           const responseToCache = response.clone();
           caches.open(CACHE_NAME).then((cache) => {
@@ -75,9 +87,20 @@ self.addEventListener('fetch', (event) => {
         return response;
       })
       .catch(() => {
-        // Si le réseau échoue, essaie le cache uniquement pour les pages
-        return caches.match(request);
+        // Si le réseau échoue, essaie le cache uniquement pour les pages HTML
+        if (request.headers.get('accept')?.includes('text/html')) {
+          return caches.match(request);
+        }
+        // Pour les autres ressources, retourne une erreur réseau
+        throw new Error('Network request failed');
       })
   );
+});
+
+// Écoute les messages pour forcer la mise à jour
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
