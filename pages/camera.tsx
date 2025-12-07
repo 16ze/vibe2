@@ -369,13 +369,21 @@ export default function Camera() {
       // Arrête le stream précédent s'il existe
       stopCamera();
 
-      // Demande l'accès à la caméra
+      // Demande l'accès à la caméra avec contraintes optimisées pour mobile
       console.log(
         "[Camera] Requesting camera access with facingMode:",
         facingMode
       );
+      
+      // Contraintes vidéo optimisées pour mobile
+      const videoConstraints: MediaTrackConstraints = {
+        facingMode: facingMode === "user" ? "user" : "environment",
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+      };
+
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode },
+        video: videoConstraints,
         audio: true,
       });
 
@@ -397,16 +405,37 @@ export default function Camera() {
       if (videoRef.current) {
         console.log("[Camera] Attaching stream to video element");
         console.log("[Camera] videoRef.current exists:", !!videoRef.current);
+        
+        // S'assure que la vidéo est muette pour l'autoplay sur mobile
+        videoRef.current.muted = true;
+        videoRef.current.playsInline = true;
+        videoRef.current.autoplay = true;
+        
         videoRef.current.srcObject = stream;
         console.log(
           "[Camera] srcObject assigned:",
           !!videoRef.current.srcObject
         );
 
-        // Force la lecture
-        videoRef.current.play().catch((err) => {
-          console.error("[Camera] Error playing video:", err);
-        });
+        // Force la lecture immédiatement
+        const playPromise = videoRef.current.play();
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              console.log("[Camera] Video playing successfully");
+              setIsLoading(false);
+            })
+            .catch((err) => {
+              console.error("[Camera] Error playing video:", err);
+              // Réessaye après un court délai
+              setTimeout(() => {
+                videoRef.current?.play().catch((e) => {
+                  console.error("[Camera] Retry play failed:", e);
+                  setIsLoading(false);
+                });
+              }, 500);
+            });
+        }
 
         // Attend que la vidéo soit prête
         videoRef.current.onloadedmetadata = () => {
@@ -417,14 +446,38 @@ export default function Camera() {
             "x",
             videoRef.current?.videoHeight
           );
+          // Force le play si pas déjà en cours
+          if (videoRef.current && videoRef.current.paused) {
+            videoRef.current.play().catch((err) => {
+              console.error("[Camera] Error playing after metadata:", err);
+            });
+          }
           setIsLoading(false);
         };
 
         // Fallback : si onloadedmetadata ne se déclenche pas
         videoRef.current.oncanplay = () => {
           console.log("[Camera] Video can play");
+          if (videoRef.current && videoRef.current.paused) {
+            videoRef.current.play().catch((err) => {
+              console.error("[Camera] Error playing after canplay:", err);
+            });
+          }
           setIsLoading(false);
         };
+
+        // Gestion d'erreur du stream
+        stream.getVideoTracks().forEach((track) => {
+          track.addEventListener("ended", () => {
+            console.log("[Camera] Video track ended");
+            setIsLoading(false);
+          });
+          // Vérifie l'état du track
+          if (track.readyState === "ended") {
+            console.log("[Camera] Video track already ended");
+            setIsLoading(false);
+          }
+        });
       } else {
         console.error("[Camera] videoRef.current is null!");
         setIsLoading(false);
@@ -1067,6 +1120,18 @@ export default function Camera() {
         muted
         className="absolute inset-0 h-full w-full object-cover z-0"
         style={selectedFilter.style}
+        onLoadedMetadata={() => {
+          console.log("[Camera] Video metadata loaded in JSX");
+          if (videoRef.current && videoRef.current.paused) {
+            videoRef.current.play().catch(console.error);
+          }
+        }}
+        onCanPlay={() => {
+          console.log("[Camera] Video can play in JSX");
+          if (videoRef.current && videoRef.current.paused) {
+            videoRef.current.play().catch(console.error);
+          }
+        }}
       />
 
       {/* Conteneur pour tous les contrôles et overlays - z-10 pour être au-dessus de la vidéo */}
