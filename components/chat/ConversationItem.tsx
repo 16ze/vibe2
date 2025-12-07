@@ -55,19 +55,25 @@ export default function ConversationItem({
   const isMe =
     currentUserId && conversation.last_message_sender_id === currentUserId;
 
-  // Détermine si le message est lu
-  // Si c'est mon message (isMe), alors isRead = is_last_message_read (true = lu, false = non lu)
-  // Si ce n'est pas mon message, alors isRead = true (car on ne montre l'icône que pour mes messages)
-  const isRead = isMe ? conversation.is_last_message_read : true;
+  // LOGIQUE SNAPCHAT :
+  // - Si c'est MON message (isMe) : isRead = is_last_message_read (false = il n'a pas vu = PLEIN, true = il a vu = VIDE)
+  // - Si c'est SON message (!isMe) : isRead = !hasUnread (true = j'ai lu = VIDE, false = je n'ai pas lu = PLEIN)
+  const isRead = isMe 
+    ? conversation.is_last_message_read  // Si mon message : true = lu par lui (VIDE), false = non lu par lui (PLEIN)
+    : !hasUnread;                         // Si son message : true = lu par moi (VIDE), false = non lu par moi (PLEIN)
 
   const colors = getMediaTypeColor(lastMessageType);
 
   /**
-   * Détermine la couleur de l'icône selon le type de message
+   * Détermine la couleur de l'icône selon le type de message (Logique Snapchat)
+   * 🔵 BLEU = Message Texte
+   * 🔴 ROUGE = Photo/Image
+   * 🟣 VIOLET = Vidéo
    */
   const getColorClass = (type: string) => {
     switch (type) {
       case "image":
+      case "photo":
         return "text-red-500";
       case "video":
         return "text-purple-500";
@@ -122,19 +128,30 @@ export default function ConversationItem({
           </div>
         ) : (
           <div className="flex items-center gap-2 mt-0.5">
-            {/* Icône SendHorizontal (si c'est mon message) ou Square (si c'est le sien) */}
+            {/* LOGIQUE SNAPCHAT :
+                - FLÈCHE (SendHorizontal) = J'ai envoyé (isMe = true)
+                - CARRÉ (Square) = J'ai reçu (isMe = false)
+                - PLEIN (fill-current) = Non lu (isRead = false)
+                - VIDE (outline) = Lu (isRead = true)
+            */}
             {isMe ? (
+              // FLÈCHE : J'ai envoyé
+              // PLEIN = Il n'a pas vu (isRead = false) → fill-current
+              // VIDE = Il a vu (isRead = true) → outline
               <SendHorizontal
                 className={`w-[18px] h-[18px] ${getColorClass(
                   lastMessageType
-                )} ${isRead ? "" : "fill-current"}`}
+                )} ${!isRead ? "fill-current" : ""}`}
                 strokeWidth={isRead ? 2 : 1.5}
               />
             ) : (
+              // CARRÉ : J'ai reçu
+              // PLEIN = Je n'ai pas lu (isRead = false) → fill-current
+              // VIDE = J'ai lu (isRead = true) → outline
               <Square
                 className={`w-[18px] h-[18px] ${getColorClass(
                   lastMessageType
-                )} ${isRead ? "" : "fill-current"}`}
+                )} ${!isRead ? "fill-current" : ""}`}
                 strokeWidth={isRead ? 2 : 1.5}
               />
             )}
