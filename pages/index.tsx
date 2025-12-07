@@ -1,13 +1,14 @@
 "use client";
 
 import React, { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "next/router";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 
 /**
  * Page d'accueil (Splash Screen) de l'application VIBE
  * Première page vue par un visiteur non connecté
+ * CORRECTION : Le contenu ne s'affiche que si l'utilisateur est confirmé comme NON CONNECTÉ
  * Design "Electric Vibe" - Violet Électrique → Bleu Cyan
  */
 export default function Index() {
@@ -17,7 +18,6 @@ export default function Index() {
   /**
    * Redirige automatiquement selon l'état de connexion
    * Si connecté → /feed
-   * Si non connecté → reste sur la splash screen
    */
   useEffect(() => {
     if (!isLoading && user) {
@@ -26,18 +26,16 @@ export default function Index() {
   }, [user, isLoading, router]);
 
   /**
-   * Si l'utilisateur est connecté, ne rien afficher (redirection en cours)
+   * SI : Chargement en cours OU Utilisateur détecté (en attente de redirect)
+   * ALORS : Afficher un écran blanc (ou noir) simple
    */
   if (isLoading || user) {
-    return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="text-4xl font-bold text-gradient-vibe">VIBE</div>
-          <div className="w-8 h-8 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-        </div>
-      </div>
-    );
+    return <div className="min-h-screen w-full bg-white dark:bg-black" />;
   }
+
+  /**
+   * SINON (Chargement fini ET Pas d'user) : Afficher la Landing Page
+   */
 
   /**
    * Splash Screen pour les visiteurs non connectés

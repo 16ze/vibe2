@@ -186,8 +186,8 @@ class UserStorage {
       // Crée un utilisateur par défaut si aucun n'existe
       const defaultUser = {
         email: "demo@vibe.app",
-        full_name: "Utilisateur Demo",
-        username: "demo_user",
+        full_name: "Anonyme",
+        username: "anonyme",
         avatar_url: null,
         bio: null,
         created_date: new Date().toISOString(),
@@ -586,7 +586,15 @@ export async function migrateFromLocalStorage(): Promise<void> {
       }
     }
 
-    localStorage.setItem(migrationKey, "true");
+    try {
+      localStorage.setItem(migrationKey, "true");
+    } catch (error: any) {
+      if (error.name === 'QuotaExceededError') {
+        console.error('[IndexedDB] Quota exceeded when saving migration flag');
+      } else {
+        console.error('[IndexedDB] Error saving migration flag:', error);
+      }
+    }
     console.log("Migration completed successfully");
   } catch (error) {
     console.error("Error during migration:", error);

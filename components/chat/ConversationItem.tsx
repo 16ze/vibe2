@@ -81,7 +81,7 @@ export default function ConversationItem({
         {/* Ligne 1 : Nom */}
         <div className="flex items-center gap-2">
           <h3 className="font-bold text-[15px] text-gray-900 truncate">
-            {conversation.participant_name || "Utilisateur"}
+            {conversation.participant_name || "Anonyme"}
           </h3>
         </div>
 

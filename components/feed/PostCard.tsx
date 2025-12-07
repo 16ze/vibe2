@@ -8,8 +8,10 @@ import {
   MessageCircle,
   MoreHorizontal,
   Send,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 
 /**
  * Props du composant PostCard
@@ -37,6 +39,11 @@ export default function PostCard({
   const [showHeart, setShowHeart] = useState(false);
   const [likesCount, setLikesCount] = useState(post.likes_count || 0);
   const [timeAgo, setTimeAgo] = useState<string>("");
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+  // CORRECTION : Gestion de l'état sonore (toujours muet au début pour contourner les restrictions navigateurs)
+  const [isMuted, setIsMuted] = useState(true);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const videoContainerRef = useRef<HTMLDivElement>(null);
 
   /**
    * Calcule le temps relatif côté client uniquement
@@ -51,6 +58,46 @@ export default function PostCard({
       setTimeAgo("Maintenant");
     }
   }, [post.created_date]);
+
+  /**
+   * IntersectionObserver pour lancer automatiquement la vidéo quand elle est visible
+   * (Optionnel mais recommandé pour une meilleure UX)
+   */
+  useEffect(() => {
+    if (post.media_type !== "video" || !videoRef.current || !videoContainerRef.current) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && entry.intersectionRatio > 0.5) {
+            // La vidéo est visible à plus de 50% → on peut la lancer
+            if (videoRef.current && !isVideoPlaying) {
+              videoRef.current.play().catch((err) => {
+                console.log("[PostCard] Autoplay prevented:", err);
+              });
+            }
+          } else {
+            // La vidéo n'est plus visible → on la met en pause
+            if (videoRef.current && isVideoPlaying) {
+              videoRef.current.pause();
+            }
+          }
+        });
+      },
+      {
+        threshold: 0.5, // Déclenche quand 50% de la vidéo est visible
+        rootMargin: "0px",
+      }
+    );
+
+    observer.observe(videoContainerRef.current);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [post.media_type, isVideoPlaying]);
 
   const handleDoubleTap = () => {
     if (!liked) {
@@ -92,7 +139,7 @@ export default function PostCard({
           </div>
           <div>
             <p className="font-semibold text-sm text-gray-900">
-              {post.author_name || "Utilisateur"}
+              {post.author_name || "Anonyme"}
             </p>
           </div>
         </div>
@@ -103,19 +150,54 @@ export default function PostCard({
 
       {/* Media - Utilise MediaRenderer pour gérer IndexedDB et URLs classiques */}
       <div
+        ref={videoContainerRef}
         className="relative aspect-square bg-gray-100"
         onDoubleClick={handleDoubleTap}
       >
-        <MediaRenderer
-          src={post.media_url}
-          type={post.media_type === "video" ? "video" : "image"}
-          className="w-full h-full object-cover"
-          controls={post.media_type === "video" ? false : undefined}
-          playsInline={post.media_type === "video" ? true : undefined}
-          muted={post.media_type === "video" ? true : undefined}
-          loop={post.media_type === "video" ? true : undefined}
-          loading={post.media_type === "photo" ? "lazy" : undefined}
-        />
+        {/* CORRECTION BUG : Affichage conditionnel explicite pour vidéo/photo */}
+        {/* Vérifie explicitement si c'est une vidéo (media_type peut être "video" ou "photo") */}
+        {post.media_type === "video" ? (
+          <>
+            <MediaRenderer
+              ref={videoRef}
+              src={post.media_url}
+              type="video"
+              className="w-full h-full object-cover"
+              autoPlay // Lance la lecture automatiquement
+              loop // Tourne en boucle
+              muted={isMuted} // Contrôlé par le state (doit être true au début)
+              playsInline // OBLIGATOIRE pour iOS (sinon ça s'ouvre en plein écran)
+              controls={false} // On cache les contrôles natifs
+              onPlay={() => setIsVideoPlaying(true)}
+              onPause={() => setIsVideoPlaying(false)}
+            />
+            {/* Bouton Volume (Overlay) - Petit bouton rond en bas à droite */}
+            <motion.button
+              whileTap={{ scale: 0.9 }}
+              onClick={(e) => {
+                e.stopPropagation(); // Empêche la propagation du clic vers le post parent
+                if (videoRef.current) {
+                  videoRef.current.muted = !isMuted;
+                  setIsMuted(!isMuted);
+                }
+              }}
+              className="absolute bottom-4 right-4 z-10 w-10 h-10 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center"
+            >
+              {isMuted ? (
+                <VolumeX className="w-5 h-5 text-white" />
+              ) : (
+                <Volume2 className="w-5 h-5 text-white" />
+              )}
+            </motion.button>
+          </>
+        ) : (
+          <MediaRenderer
+            src={post.media_url}
+            type="image"
+            className="w-full h-full object-cover"
+            loading="lazy"
+          />
+        )}
 
         <AnimatePresence>
           {showHeart && (

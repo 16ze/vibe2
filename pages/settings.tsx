@@ -199,10 +199,22 @@ export default function Settings() {
     if (typeof window !== "undefined") {
       if (value) {
         document.documentElement.classList.add("dark");
-        localStorage.setItem(THEME_STORAGE_KEY, "dark");
+        try {
+          localStorage.setItem(THEME_STORAGE_KEY, "dark");
+        } catch (error: any) {
+          if (error.name === 'QuotaExceededError') {
+            console.error('[Settings] Quota exceeded when saving theme');
+          }
+        }
       } else {
         document.documentElement.classList.remove("dark");
-        localStorage.setItem(THEME_STORAGE_KEY, "light");
+        try {
+          localStorage.setItem(THEME_STORAGE_KEY, "light");
+        } catch (error: any) {
+          if (error.name === 'QuotaExceededError') {
+            console.error('[Settings] Quota exceeded when saving theme');
+          }
+        }
       }
     }
   };
@@ -225,7 +237,15 @@ export default function Settings() {
         newSettings = { ...newSettings, ...settings };
       }
 
-      localStorage.setItem(USER_SETTINGS_KEY, JSON.stringify(newSettings));
+      try {
+        localStorage.setItem(USER_SETTINGS_KEY, JSON.stringify(newSettings));
+      } catch (error: any) {
+        if (error.name === 'QuotaExceededError') {
+          console.error('[Settings] Quota exceeded when saving settings');
+        } else {
+          console.error('[Settings] Error saving settings:', error);
+        }
+      }
 
       // Émet un événement pour notifier les autres composants
       window.dispatchEvent(new CustomEvent("user-settings-changed", { detail: newSettings }));

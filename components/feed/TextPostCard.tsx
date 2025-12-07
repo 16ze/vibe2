@@ -136,10 +136,10 @@ export default function TextPostCard({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap mb-1">
               <h3 className="font-bold text-[15px] text-gray-900 hover:underline cursor-pointer">
-                {post.author_name || "Utilisateur"}
+                {post.author_name || "Anonyme"}
               </h3>
               <span className="text-[14px] text-gray-500">
-                {generateUsername(post.author_name || "utilisateur")}
+                {generateUsername(post.author_name || "anonyme")}
               </span>
               <span className="text-gray-400">·</span>
               <time className="text-[14px] text-gray-500 hover:underline cursor-pointer">

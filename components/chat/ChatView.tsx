@@ -185,7 +185,7 @@ export default function ChatView({
             </div>
             <div>
               <h2 className="font-semibold text-gray-900 text-sm">
-                {conversation.participant_name || "Utilisateur"}
+                {conversation.participant_name || "Anonyme"}
               </h2>
               <p className="text-xs text-gray-500">
                 {conversation.is_online ? "En ligne" : "Hors ligne"}

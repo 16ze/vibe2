@@ -34,7 +34,39 @@ class LocalStorageManager {
    */
   saveAll(items: any[]): void {
     if (typeof window === 'undefined') return;
-    localStorage.setItem(this.storageKey, JSON.stringify(items));
+    try {
+      localStorage.setItem(this.storageKey, JSON.stringify(items));
+    } catch (error: any) {
+      if (error.name === 'QuotaExceededError') {
+        console.error(`[LocalStorage] Quota exceeded for ${this.storageKey}. Attempting cleanup...`);
+        // Nettoie les anciennes données si le quota est dépassé
+        this.cleanupOldItems(items);
+        // Réessaye avec les données nettoyées
+        try {
+          localStorage.setItem(this.storageKey, JSON.stringify(items));
+        } catch (retryError) {
+          console.error(`[LocalStorage] Failed to save after cleanup:`, retryError);
+        }
+      } else {
+        console.error(`[LocalStorage] Error saving ${this.storageKey}:`, error);
+      }
+    }
+  }
+
+  /**
+   * Nettoie les anciennes entités pour libérer de l'espace
+   * Modifie le tableau items en place pour garder uniquement les 50 éléments les plus récents
+   */
+  private cleanupOldItems(items: any[]): void {
+    // Garde uniquement les 50 éléments les plus récents
+    const sorted = items.sort((a, b) => {
+      const dateA = new Date(a.created_date || a.updated_date || 0).getTime();
+      const dateB = new Date(b.created_date || b.updated_date || 0).getTime();
+      return dateB - dateA;
+    });
+    // Modifie le tableau en place
+    items.length = 0;
+    items.push(...sorted.slice(0, 50));
   }
 
   /**
@@ -149,8 +181,8 @@ class UserStorage {
     // Crée un utilisateur par défaut si aucun n'existe
     const defaultUser = {
       email: 'demo@vibe.app',
-      full_name: 'Utilisateur Demo',
-      username: 'demo_user',
+      full_name: 'Anonyme',
+      username: 'anonyme',
       avatar_url: null,
       bio: null,
       created_date: new Date().toISOString(),
@@ -164,17 +196,34 @@ class UserStorage {
    */
   setCurrentUser(user: any): void {
     if (typeof window === 'undefined') return;
-    localStorage.setItem(this.currentUserKey, JSON.stringify(user));
-    
-    // Sauvegarde aussi dans la liste des utilisateurs
-    const users = this.getAll();
-    const existingIndex = users.findIndex((u) => u.email === user.email);
-    if (existingIndex >= 0) {
-      users[existingIndex] = user;
-    } else {
-      users.push(user);
+    try {
+      localStorage.setItem(this.currentUserKey, JSON.stringify(user));
+      
+      // Sauvegarde aussi dans la liste des utilisateurs
+      const users = this.getAll();
+      const existingIndex = users.findIndex((u) => u.email === user.email);
+      if (existingIndex >= 0) {
+        users[existingIndex] = user;
+      } else {
+        users.push(user);
+      }
+      localStorage.setItem(this.storageKey, JSON.stringify(users));
+    } catch (error: any) {
+      if (error.name === 'QuotaExceededError') {
+        console.error('[LocalStorage] Quota exceeded when saving user. Clearing old users...');
+        // Nettoie les anciens utilisateurs (garde uniquement les 10 plus récents)
+        const users = this.getAll();
+        const cleanedUsers = users.slice(-10);
+        try {
+          localStorage.setItem(this.storageKey, JSON.stringify(cleanedUsers));
+          localStorage.setItem(this.currentUserKey, JSON.stringify(user));
+        } catch (retryError) {
+          console.error('[LocalStorage] Failed to save user after cleanup:', retryError);
+        }
+      } else {
+        console.error('[LocalStorage] Error saving user:', error);
+      }
     }
-    localStorage.setItem(this.storageKey, JSON.stringify(users));
   }
 
   /**
@@ -252,6 +301,7 @@ class UserStorage {
 class FileStorage {
   /**
    * Upload un fichier et retourne une URL blob
+   * CORRECTION : Limite la taille des fichiers stockés en base64 pour éviter QuotaExceededError
    */
   async uploadFile(file: File): Promise<{ file_url: string }> {
     // Stocke l'URL dans le localStorage pour la persistance
@@ -262,21 +312,36 @@ class FileStorage {
       return { file_url: '' };
     }
     
+    // LIMITE : Ne stocke pas les fichiers de plus de 1MB en base64 dans localStorage
+    const MAX_SIZE_FOR_LOCALSTORAGE = 1024 * 1024; // 1MB
+    
     // Pour les images, on peut les convertir en base64 pour la persistance
-    if (file.type.startsWith('image/')) {
+    if (file.type.startsWith('image/') && file.size <= MAX_SIZE_FOR_LOCALSTORAGE) {
       const reader = new FileReader();
-      return new Promise((resolve) => {
+      return new Promise((resolve, reject) => {
         reader.onloadend = () => {
-          const base64 = reader.result as string;
-          localStorage.setItem(fileKey, base64);
-          resolve({ file_url: base64 });
+          try {
+            const base64 = reader.result as string;
+            localStorage.setItem(fileKey, base64);
+            resolve({ file_url: base64 });
+          } catch (error: any) {
+            if (error.name === 'QuotaExceededError') {
+              console.warn('[FileStorage] Quota exceeded, using blob URL instead');
+              // Fallback : utilise une URL blob si le quota est dépassé
+              const blobUrl = URL.createObjectURL(file);
+              resolve({ file_url: blobUrl });
+            } else {
+              reject(error);
+            }
+          }
         };
+        reader.onerror = () => reject(new Error('Failed to read file'));
         reader.readAsDataURL(file);
       });
     } else {
-      // Pour les vidéos, on garde l'URL blob
+      // Pour les vidéos ou gros fichiers, on garde l'URL blob (pas de stockage localStorage)
       const blobUrl = URL.createObjectURL(file);
-      localStorage.setItem(fileKey, blobUrl);
+      // Ne stocke PAS l'URL blob dans localStorage (elle est temporaire)
       return { file_url: blobUrl };
     }
   }
@@ -323,24 +388,33 @@ export function initializeWithMockData(): void {
     }));
 
     storage.Post.saveAll(posts);
-    localStorage.setItem(initKey, 'true');
+    try {
+      localStorage.setItem(initKey, 'true');
+    } catch (error: any) {
+      if (error.name === 'QuotaExceededError') {
+        console.error('[LocalStorage] Quota exceeded during initialization');
+      } else {
+        console.error('[LocalStorage] Error during initialization:', error);
+      }
+    }
 
     console.log('✅ Mock posts initialized:', posts.length);
 
-    // Force le rechargement de la page pour afficher les données
-    window.location.reload();
+    // Ne pas forcer le rechargement - les données sont déjà disponibles
+    // window.location.reload(); // DÉSACTIVÉ pour éviter les boucles de rechargement
   }).catch((err) => {
     console.error('Failed to load mock posts:', err);
   });
 }
 
-// Auto-initialisation côté client
-if (typeof window !== 'undefined') {
-  // Attend que le DOM soit prêt
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializeWithMockData);
-  } else {
-    initializeWithMockData();
-  }
-}
+// Auto-initialisation côté client DÉSACTIVÉE
+// L'initialisation est gérée par _app.tsx pour éviter les appels multiples
+// if (typeof window !== 'undefined') {
+//   // Attend que le DOM soit prêt
+//   if (document.readyState === 'loading') {
+//     document.addEventListener('DOMContentLoaded', initializeWithMockData);
+//   } else {
+//     initializeWithMockData();
+//   }
+// }
 

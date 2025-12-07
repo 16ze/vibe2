@@ -196,7 +196,15 @@ class AuthClient {
 
       // Stocke le token (même si c'est local)
       if (typeof window !== "undefined") {
-        localStorage.setItem("auth_token", result.token);
+        try {
+          localStorage.setItem("auth_token", result.token);
+        } catch (error: any) {
+          if (error.name === 'QuotaExceededError') {
+            console.error('[AuthClient] Quota exceeded when saving token');
+          } else {
+            console.error('[AuthClient] Error saving token:', error);
+          }
+        }
       }
 
       return result;
@@ -222,7 +230,15 @@ class AuthClient {
 
       // Stocke le token
       if (typeof window !== "undefined") {
-        localStorage.setItem("auth_token", result.token);
+        try {
+          localStorage.setItem("auth_token", result.token);
+        } catch (error: any) {
+          if (error.name === 'QuotaExceededError') {
+            console.error('[AuthClient] Quota exceeded when saving token');
+          } else {
+            console.error('[AuthClient] Error saving token:', error);
+          }
+        }
       }
 
       return result;

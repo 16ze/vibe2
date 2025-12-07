@@ -28,6 +28,7 @@ export interface User {
   username?: string;
   avatar_url?: string;
   bio?: string;
+  score?: number;
   created_date?: string;
 }
 
@@ -57,32 +58,58 @@ interface AuthProviderProps {
 }
 
 /**
- * Récupère le profil complet depuis la table profiles
+ * Récupère le profil complet depuis la table profiles avec retry
+ * Gère les race conditions lors de l'inscription
  */
-async function fetchProfile(userId: string): Promise<Partial<User> | null> {
-  try {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("username, full_name, avatar_url, bio, created_at, email")
-      .eq("id", userId)
-      .single();
+async function fetchProfile(
+  userId: string,
+  retries: number = 3,
+  delayMs: number = 500
+): Promise<Partial<User> | null> {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("username, full_name, avatar_url, bio, score, created_at, email")
+        .eq("id", userId)
+        .single();
 
-    if (error) {
+      if (data && !error) {
+        console.log(`[AuthContext] Profile found on attempt ${i + 1}/${retries}`);
+        return {
+          username: data?.username || "",
+          full_name: data?.full_name || "",
+          avatar_url: data?.avatar_url || "",
+          bio: data?.bio || "",
+          score: data?.score || 0,
+          created_date: data?.created_at,
+        };
+      }
+
+      // Si c'est la dernière tentative, on retourne null
+      if (i === retries - 1) {
+        console.warn(
+          `[AuthContext] Profile not found after ${retries} attempts for user:`,
+          userId
+        );
+        return null;
+      }
+
+      // Sinon, on attend avant de réessayer
+      console.log(
+        `[AuthContext] Profile not found, retrying in ${delayMs}ms... (attempt ${i + 1}/${retries})`
+      );
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    } catch (error) {
       console.error("[AuthContext] Error fetching profile:", error);
-      return null;
+      if (i === retries - 1) {
+        return null;
+      }
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
-
-    return {
-      username: data?.username || "",
-      full_name: data?.full_name || "",
-      avatar_url: data?.avatar_url || "",
-      bio: data?.bio || "",
-      created_date: data?.created_at,
-    };
-  } catch (error) {
-    console.error("[AuthContext] Error fetching profile:", error);
-    return null;
   }
+
+  return null;
 }
 
 /**
@@ -104,6 +131,7 @@ function mapSupabaseUserToAppUser(
     username: profile?.username || metadata.username || "",
     avatar_url: profile?.avatar_url || metadata.avatar_url || "",
     bio: profile?.bio || metadata.bio || "",
+    score: profile?.score || 0,
     created_date: profile?.created_date || supabaseUser.created_at,
   };
 }

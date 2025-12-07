@@ -234,11 +234,13 @@ export default function Camera() {
   );
   const [isSendModalOpen, setIsSendModalOpen] = useState(false);
   const [showFilters, setShowFilters] = useState(false); // État pour afficher/masquer les filtres
+  const [isCoolingDown, setIsCoolingDown] = useState(false); // Cooldown après fermeture de preview
 
   // Refs pour l'enregistrement vidéo
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const selectedMimeTypeRef = useRef<string>(""); // Stocke le MIME type sélectionné
 
   /**
    * Calcule le ratio effectif selon le mode
@@ -531,43 +533,30 @@ export default function Camera() {
 
   /**
    * Démarre l'enregistrement vidéo avec MediaRecorder
+   * CORRECTION BUG #2 : Détection correcte du type MIME (mp4 ou webm)
    */
   const startRecording = async () => {
-    if (!streamRef.current || !videoRef.current) return;
+    if (!streamRef.current || !videoRef.current || isCoolingDown) return;
 
     try {
       // Nettoie les chunks précédents
       recordedChunksRef.current = [];
 
-      // Détermine le MIME type supporté
-      const mimeTypes = [
-        "video/webm;codecs=vp9",
-        "video/webm;codecs=vp8",
-        "video/webm",
-        "video/mp4",
-      ];
+      // CORRECTION BUG #2 : Détecte le type supporté (mp4 prioritaire, puis webm)
+      const mimeType = MediaRecorder.isTypeSupported("video/mp4")
+        ? "video/mp4"
+        : "video/webm";
 
-      let selectedMimeType = "";
-      for (const mimeType of mimeTypes) {
-        if (MediaRecorder.isTypeSupported(mimeType)) {
-          selectedMimeType = mimeType;
-          break;
-        }
-      }
-
-      if (!selectedMimeType) {
-        console.error("[Camera] No supported MIME type found");
-        return;
-      }
+      selectedMimeTypeRef.current = mimeType;
 
       console.log(
         "[Camera] Starting recording with MIME type:",
-        selectedMimeType
+        mimeType
       );
 
       // Crée le MediaRecorder avec le stream
       const mediaRecorder = new MediaRecorder(streamRef.current, {
-        mimeType: selectedMimeType,
+        mimeType: mimeType,
         videoBitsPerSecond: 2500000, // 2.5 Mbps pour une bonne qualité
       });
 
@@ -587,18 +576,37 @@ export default function Camera() {
           recordedChunksRef.current.length
         );
 
-        // Crée le Blob final
+        // CORRECTION BUG #2 : Utilise le MIME type stocké dans la ref
+        const finalMimeType = selectedMimeTypeRef.current || mimeType;
+
+        console.log("[Camera] Creating video Blob with MIME type:", finalMimeType);
+
+        // CORRECTION CRITIQUE : Crée le Blob final avec le bon type MIME
+        // Le type doit être 'video/mp4' ou 'video/webm' pour être lisible
         const blob = new Blob(recordedChunksRef.current, {
-          type: selectedMimeType,
+          type: finalMimeType,
+        });
+
+        console.log("[Camera] Blob created:", {
+          size: blob.size,
+          type: blob.type,
+          expectedType: finalMimeType,
         });
 
         // Crée l'URL pour la preview
         const videoUrl = URL.createObjectURL(blob);
 
-        // Crée un File pour la sauvegarde
-        const fileExtension = selectedMimeType.includes("mp4") ? "mp4" : "webm";
+        // Crée un File pour la sauvegarde avec le bon type MIME
+        const fileExtension = finalMimeType.includes("mp4") ? "mp4" : "webm";
         const file = new File([blob], `recording.${fileExtension}`, {
-          type: selectedMimeType,
+          type: finalMimeType,
+        });
+
+        console.log("[Camera] File created for upload:", {
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          extension: fileExtension,
         });
 
         // RÈGLE ABSOLUE : Ne jamais sauvegarder directement, toujours passer en mode preview
@@ -695,8 +703,14 @@ export default function Camera() {
   /**
    * Gère le début de l'interaction avec le bouton déclencheur
    * Détecte si c'est un long press (vidéo) ou un clic court (photo)
+   * CORRECTION BUG #1 : Vérifie le cooldown avant de démarrer
    */
   const handleShutterDown = () => {
+    // CORRECTION BUG #1 : Ne rien faire si on est en cooldown
+    if (isCoolingDown) {
+      return;
+    }
+
     // Annule le timer précédent s'il existe
     if (longPressTimerRef.current) {
       clearTimeout(longPressTimerRef.current);
@@ -711,8 +725,14 @@ export default function Camera() {
 
   /**
    * Gère la fin de l'interaction avec le bouton déclencheur
+   * CORRECTION BUG #1 : Vérifie le cooldown avant de capturer
    */
   const handleShutterUp = () => {
+    // CORRECTION BUG #1 : Ne rien faire si on est en cooldown
+    if (isCoolingDown) {
+      return;
+    }
+
     // Annule le timer du long press
     if (longPressTimerRef.current) {
       clearTimeout(longPressTimerRef.current);
@@ -812,8 +832,10 @@ export default function Camera() {
       // Récupère l'utilisateur actuel
       const user = await vibe.auth.me();
 
-      // Détermine le type de média correct (image ou video)
-      const mediaType = capturedMedia.type === "video" ? "video" : "photo";
+      // CORRECTION BUG : Détermine le type de média dynamiquement basé sur le blob capturé
+      // Ne force pas 'photo', vérifie vraiment si c'est une vidéo
+      // Le type doit être "photo" ou "video" selon types/post.ts
+      const mediaType = capturedMedia.type.includes("video") ? "video" : "photo";
 
       if (captureMode === "STORY") {
         // Crée une Story (expire dans 24h)
@@ -844,7 +866,7 @@ export default function Camera() {
           media_url: fileUrl,
           media_type: "video",
           author_name:
-            user.full_name || user.email?.split("@")[0] || "Utilisateur",
+            user.full_name || user.username || user.email?.split("@")[0] || "Anonyme",
           author_avatar: user.avatar_url,
           created_by: user.email,
           likes_count: 0,
@@ -871,7 +893,7 @@ export default function Camera() {
           media_url: fileUrl,
           media_type: mediaType, // Utilise le type déterminé (photo ou video)
           author_name:
-            user.full_name || user.email?.split("@")[0] || "Utilisateur",
+            user.full_name || user.username || user.email?.split("@")[0] || "Anonyme",
           author_avatar: user.avatar_url,
           created_by: user.email,
           likes_count: 0,
@@ -980,8 +1002,21 @@ export default function Camera() {
 
   /**
    * Réinitialise la capture et nettoie les ressources
+   * CORRECTION BUG #1 : Empêche la capture involontaire après fermeture
    */
-  const resetCapture = () => {
+  const resetCapture = (e?: React.MouseEvent) => {
+    // Stop propagation pour éviter que l'événement traverse
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+
+    // Active le cooldown pour empêcher les captures involontaires
+    setIsCoolingDown(true);
+    setTimeout(() => {
+      setIsCoolingDown(false);
+    }, 500);
+
     // Arrête l'enregistrement si en cours
     if (isRecording && mediaRecorderRef.current) {
       stopRecording();
@@ -1426,9 +1461,10 @@ export default function Camera() {
               )}
 
               {/* Bouton de retour (X) en haut à gauche */}
+              {/* CORRECTION BUG #1 : stopPropagation pour éviter la capture involontaire */}
               <motion.button
                 whileTap={{ scale: 0.9 }}
-                onClick={resetCapture}
+                onClick={(e) => resetCapture(e)}
                 className="absolute top-4 left-4 z-50 w-10 h-10 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center"
               >
                 <X className="w-6 h-6 text-white" />

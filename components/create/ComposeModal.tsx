@@ -114,7 +114,7 @@ export default function ComposeModal({
           // Utilisateur par défaut si pas de login
           user = {
             email: "user@vibe.app",
-            name: "Utilisateur Vibe",
+            name: "Anonyme",
           };
         }
       }
@@ -123,7 +123,7 @@ export default function ComposeModal({
       const newPost: Omit<TextPost, "id"> = {
         type: "text",
         content: content.trim(),
-        author_name: user.name || user.email?.split("@")[0] || "Utilisateur",
+        author_name: user.name || user.email?.split("@")[0] || "Anonyme",
         author_avatar: user.avatar,
         created_by: user.email,
         likes_count: 0,
