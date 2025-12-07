@@ -1081,3 +1081,4 @@ Ce projet représente une migration complète d'un système localStorage vers Su
 
 L'application est **installable en PWA** sur iOS et Android, et offre une expérience utilisateur fluide avec des notifications en temps réel et une synchronisation automatique des données.
 
+

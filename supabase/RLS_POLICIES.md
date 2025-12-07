@@ -222,3 +222,4 @@ Pour vérifier que les politiques RLS sont actives :
 - Sans RLS, n'importe qui peut accéder/modifier toutes les données
 - Les politiques sont évaluées **côté serveur**, donc même si le client est compromis, les données sont protégées
 
+

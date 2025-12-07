@@ -106,3 +106,4 @@ navigator.serviceWorker.getRegistrations().then(console.log);
 2. Menu (3 points) → "Ajouter à l'écran d'accueil"
 3. L'app devrait s'ouvrir en mode standalone
 
+
